@@ -20,8 +20,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, HERE)
 from test_protocol_data import (  # noqa: E402
-    ACCEPTANCE, DETAILS, EARLIER_RUNS, EV_CHECKS, FIXED, HOW_TO, LIVE, LIVE_EXAMPLE, MANUAL, MANUAL_EXAMPLE,
-    MANUAL_NOTE, OPEN_ITEMS, READINGS, RUN_11_OPERATIONS,
+    ACCEPTANCE, CHANGES, DETAILS, EARLIER_RUNS, EV_CHECKS, FIXED, HOW_TO, LIVE, LIVE_EXAMPLE, MANUAL,
+    MANUAL_EXAMPLE, MANUAL_NOTE, OPEN_ITEMS, READINGS, RUN_11_OPERATIONS,
 )
 
 OUT = sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, "test-protocol.xlsx")
@@ -308,6 +308,26 @@ met_rules(tr, f"M5:M{last_ac}")
 tr.freeze_panes = "C5"
 landscape(tr)
 
+# ---------------- Changes after acceptance ----------------
+ch = wb.create_sheet("Changes")
+title(ch, "Changes after acceptance (13 Oct 2026)",
+      "Decisions made after the acceptance tests, each checked with a recorded run. C-05 is staged and waits for "
+      "the evaluation after the 7 Nov credit reset.", "H")
+header(ch, 4, ["ID", "Change", "Check", "Expected", "Actual result", "Pass/Fail", "Evidence", "Date"])
+widths(ch, [7, 36, 34, 36, 60, 10, 28, 11])
+for row in CHANGES:
+    ch.append(list(row))
+last_c = 4 + len(CHANGES)
+style(ch, f"A5:D{last_c}")
+style(ch, f"E5:H{last_c}", fill=INPUT_FILL)
+for r in range(5, last_c + 1):
+    ch.cell(row=r, column=1).font = BOLD
+    ch.cell(row=r, column=6).alignment = CENTER
+    fit_row(ch, r)
+pass_fail(ch, f"F5:F{last_c}", validate=f"F5:F{last_c}")
+ch.freeze_panes = "B5"
+landscape(ch)
+
 # ---------------- Summary (first tab) ----------------
 s = wb.create_sheet("Summary", 0)
 title(s, "Email Triage Agent: Test Protocol and Results",
@@ -440,6 +460,13 @@ section(nxt, "Found and fixed during testing")
 nxt = note_rows(nxt + 1, FIXED) + 1
 section(nxt, "Known open items (details in docs/04-test-protocol.md, section 5)")
 nxt = note_rows(nxt + 1, OPEN_ITEMS) + 1
+section(nxt, "Changes after acceptance (tab Changes)")
+s.cell(row=nxt + 1, column=1, value="Changes checked").font = BOLD
+s.cell(row=nxt + 1, column=2, value=f'=COUNTIF(Changes!F5:F{last_c},"PASS")&" passed of "&COUNTA(Changes!A5:A{last_c})'
+                                    f'&", "&COUNTBLANK(Changes!F5:F{last_c})&" not run yet"')
+s.cell(row=nxt + 1, column=2).font = BOLD
+s.merge_cells(f"B{nxt + 1}:G{nxt + 1}")
+nxt = nxt + 3
 section(nxt, "How to use this workbook")
 note_rows(nxt + 1, HOW_TO, numbered=False)
 landscape(s)
