@@ -400,7 +400,7 @@
           "insertDataOption": "INSERT_ROWS",
           "spreadsheetId": "PASTE_SHEET_ID",
           "sheetId": "triage_log",
-          "tableFirstRow": "A1:Z1",
+          "tableFirstRow": "A1:BZ1",
           "values": {
            "0": "{{formatDate(now; \"YYYY-MM-DD HH:mm:ss\")}}",
            "1": "{{8.id}}",
@@ -412,7 +412,8 @@
            "19": "{{get(map(4.array; \"value\"; \"key\"; \"model\"); 1)}}",
            "23": "error",
            "24": "{{11.error.message}}",
-           "25": "{{formatDate(now; \"YYYYMMDD-HHmm\")}}"
+           "25": "{{formatDate(now; \"YYYYMMDD-HHmm\")}}",
+           "26": "{{formatDate(8.internalDate; \"YYYY-MM-DD HH:mm:ss\")}}"
           }
          },
          "metadata": {
@@ -845,7 +846,7 @@
             "insertDataOption": "INSERT_ROWS",
             "spreadsheetId": "PASTE_SHEET_ID",
             "sheetId": "triage_log",
-            "tableFirstRow": "A1:Z1",
+            "tableFirstRow": "A1:BZ1",
             "values": {
              "0": "{{formatDate(now; \"YYYY-MM-DD HH:mm:ss\")}}",
              "1": "{{8.id}}",
@@ -872,7 +873,9 @@
              "22": "{{12.category}}",
              "23": "done",
              "24": "",
-             "25": "{{13.run_id}}"
+             "25": "{{13.run_id}}",
+             "26": "{{formatDate(8.internalDate; \"YYYY-MM-DD HH:mm:ss\")}}",
+             "27": "{{if(13.draft_wanted = \"yes\"; round((parseNumber(formatDate(now; \"X\"); \".\") - parseNumber(formatDate(8.internalDate; \"X\"); \".\")) / 6) / 10; emptystring)}}"
             }
            },
            "metadata": {

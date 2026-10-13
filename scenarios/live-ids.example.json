@@ -15,6 +15,7 @@
     "scheduling": "Label_...",
     "noise": "Label_...",
     "review": "Label_...",
-    "processed": "Label_..."
+    "processed": "Label_...",
+    "hr": "Label_..."
   }
 }

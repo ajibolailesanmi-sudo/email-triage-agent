@@ -1,0 +1,128 @@
+{
+ "name": "04 - Weekly Digest",
+ "flow": [
+  {
+   "id": 1,
+   "module": "google-sheets:getSheetContent",
+   "version": 2,
+   "parameters": {
+    "__IMTCONN__": 0
+   },
+   "mapper": {
+    "select": "map",
+    "range": "A2:AB",
+    "includesHeaders": false,
+    "valueRenderOption": "FORMATTED_VALUE",
+    "dateTimeRenderOption": "FORMATTED_STRING",
+    "spreadsheetId": "PASTE_SHEET_ID",
+    "sheetId": "triage_log"
+   },
+   "metadata": {
+    "designer": {
+     "x": 0,
+     "y": 0,
+     "name": "Log rows"
+    }
+   }
+  },
+  {
+   "id": 2,
+   "module": "builtin:BasicAggregator",
+   "version": 1,
+   "parameters": {
+    "feeder": 1
+   },
+   "mapper": {
+    "status": "{{1.`23`}}",
+    "category": "{{1.`6`}}",
+    "urgency": "{{1.`7`}}",
+    "needs_human": "{{1.`11`}}",
+    "draft": "{{1.`16`}}",
+    "lead": "{{1.`18`}}",
+    "minutes": "{{parseNumber(ifempty(1.`27`; \"0\"); \".\")}}",
+    "has_minutes": "{{if(length(ifempty(1.`27`; emptystring)) > 0; \"yes\"; \"no\")}}"
+   },
+   "filter": {
+    "name": "Logged in the last 7 days",
+    "conditions": [
+     [
+      {
+       "a": "{{parseNumber(formatDate(parseDate(1.`0`; \"YYYY-MM-DD H:mm:ss\"); \"X\"); \".\")}}",
+       "o": "number:greater",
+       "b": "{{parseNumber(formatDate(addDays(now; -7); \"X\"); \".\")}}"
+      }
+     ]
+    ]
+   },
+   "metadata": {
+    "designer": {
+     "x": 300,
+     "y": 0,
+     "name": "Last 7 days"
+    },
+    "restore": {
+     "extra": {
+      "feeder": {
+       "label": "Google Sheets - Get Range Values [1]"
+      },
+      "target": {
+       "label": "Custom"
+      }
+     }
+    }
+   }
+  },
+  {
+   "id": 3,
+   "module": "slack:CreateMessage",
+   "version": 4,
+   "parameters": {
+    "__IMTCONN__": 0
+   },
+   "mapper": {
+    "channelWType": "manualy",
+    "channel": "#support-triage",
+    "text": ":bar_chart: *Weekly triage digest*, {{formatDate(addDays(now; -7); \"D MMM\")}} to {{formatDate(now; \"D MMM YYYY\")}}\n*{{length(map(2.array; \"status\"; \"status\"; \"done\"))}} emails triaged*{{if(length(map(2.array; \"status\"; \"status\"; \"error\")) > 0; \", plus \"; emptystring)}}{{if(length(map(2.array; \"status\"; \"status\"; \"error\")) > 0; length(map(2.array; \"status\"; \"status\"; \"error\")); emptystring)}}{{if(length(map(2.array; \"status\"; \"status\"; \"error\")) > 0; \" failed attempts, each retried on the next run\"; emptystring)}}\nBy category: Support {{length(map(2.array; \"category\"; \"category\"; \"support_request\"))}}, Sales {{length(map(2.array; \"category\"; \"category\"; \"sales_inquiry\"))}}, Billing {{length(map(2.array; \"category\"; \"category\"; \"billing_question\"))}}, Scheduling {{length(map(2.array; \"category\"; \"category\"; \"scheduling\"))}}, Noise {{length(map(2.array; \"category\"; \"category\"; \"vendor_or_marketing,automated_notification\"))}}, Review {{length(map(2.array; \"category\"; \"category\"; \"unclear\"))}}\nBy urgency: urgent {{length(map(2.array; \"urgency\"; \"urgency\"; \"urgent\"))}}, normal {{length(map(2.array; \"urgency\"; \"urgency\"; \"normal\"))}}, low {{length(map(2.array; \"urgency\"; \"urgency\"; \"low\"))}}\nDrafts created: {{length(map(2.array; \"draft\"; \"draft\"; \"yes\"))}}. Median time from arrival to draft: {{if(length(map(2.array; \"minutes\"; \"has_minutes\"; \"yes\")) > 0; round(median(if(length(map(2.array; \"minutes\"; \"has_minutes\"; \"yes\")) > 0; map(2.array; \"minutes\"; \"has_minutes\"; \"yes\"); add(emptyarray; 0))) * 10) / 10; \"n/a\")}}{{if(length(map(2.array; \"minutes\"; \"has_minutes\"; \"yes\")) > 0; \" min, over \"; \" (no timed drafts this week)\")}}{{if(length(map(2.array; \"minutes\"; \"has_minutes\"; \"yes\")) > 0; length(map(2.array; \"minutes\"; \"has_minutes\"; \"yes\")); emptystring)}}{{if(length(map(2.array; \"minutes\"; \"has_minutes\"; \"yes\")) > 0; \" drafts\"; emptystring)}}\nNeeded a person: {{length(map(2.array; \"needs_human\"; \"needs_human\"; \"TRUE\"))}}. Sent to the lead router: {{length(map(2.array; \"lead\"; \"lead\"; \"yes\"))}}.\n<https://docs.google.com/spreadsheets/d/PASTE_SHEET_ID|Open the triage log>",
+    "parse": false,
+    "mrkdwn": true,
+    "unfurl_links": false,
+    "unfurl_media": false
+   },
+   "metadata": {
+    "designer": {
+     "x": 600,
+     "y": 0,
+     "name": "Post digest"
+    },
+    "restore": {
+     "expect": {
+      "channelWType": {
+       "label": "Enter manually"
+      }
+     }
+    }
+   }
+  }
+ ],
+ "metadata": {
+  "instant": false,
+  "version": 1,
+  "scenario": {
+   "roundtrips": 1,
+   "maxErrors": 3,
+   "autoCommit": true,
+   "autoCommitTriggerLast": true,
+   "sequential": false,
+   "slots": null,
+   "confidential": false,
+   "dataloss": false,
+   "dlq": false,
+   "freshVariables": false
+  },
+  "designer": {
+   "orphans": []
+  },
+  "zone": "eu1.make.com",
+  "notes": []
+ }
+}

@@ -1,8 +1,12 @@
-"""Generate the four Make scenario blueprints for the Email Triage Agent.
+"""Generate the five Make scenario blueprints for the Email Triage Agent.
 
-Run:  python3 scenarios/build_blueprints.py [--placeholders]
-Writes scenarios/00-connection-check.json, 01-triage-inbox.json, 02-evaluate-classifier.json,
-03-seed-test-emails.json. With --placeholders, live-ids.json is ignored (the files committed to the repo). Load each in Make with the scenario menu: Paste blueprint from clipboard
+Run:  python3 scenarios/build_blueprints.py [--placeholders] [--prompt 1.2] [--out DIR]
+Writes 00-connection-check.json, 01-triage-inbox.json, 02-evaluate-classifier.json,
+03-seed-test-emails.json and 04-weekly-digest.json into scenarios/ (prompt 1.1, the live version)
+or, with --prompt 1.2, into scenarios/prompt-1.2/ (the staged job_application release, see
+docs/05-prompt-1.2-release.md). --out writes them somewhere else, for example a scratch folder for
+the copies that carry your live IDs. With --placeholders, live-ids.json is ignored (the files
+committed to the repo). Load each in Make with the scenario menu: Paste blueprint from clipboard
 (or Import blueprint), then select your connections in the modules that ask for one.
 
 Everything that is specific to one installation lives in CONFIG below. The public repo ships the
@@ -37,17 +41,54 @@ CONFIG = {
         "noise": "Label_NOISE",
         "review": "Label_REVIEW",
         "processed": "Label_PROCESSED",
+        "hr": "Label_HR",     # Triage/HR, used from prompt 1.2 on (job_application)
     },
 }
 live = os.path.join(HERE, "live-ids.json")
 if os.path.exists(live) and "--placeholders" not in sys.argv:  # --placeholders: the clean files for the repo
     CONFIG.update(json.load(open(live, encoding="utf-8")))
 
-SCHEMA = json.load(open(os.path.join(ROOT, "prompts", "triage-response-schema.json"), encoding="utf-8"))
+# ----------------------------------------------------------------------------------------------
+# Prompt versions. 1.1 is live. 1.2 adds the job_application category (Triage/HR label, no draft,
+# no Slack post, always low urgency) and is staged until it passes the evaluation on eval_set_1_2.
+# ----------------------------------------------------------------------------------------------
+# eval_prompt: where 02 reads the prompt it scores. The staged version is scored from the staging cell prompt!B2, so
+# production (which reads prompt!A2) is never touched during an evaluation; 02 then labels the run with the staged
+# version instead of the prompt_version setting.
+PROFILES = {
+    "1.1": {"schema": "triage-response-schema.json", "out": HERE, "eval_tab": "eval_set", "eval_rows": 40, "hr": False,
+            "eval_prompt": "A2:A2", "eval_label": None},
+    "1.2": {"schema": "triage-response-schema-1.2.json", "out": os.path.join(HERE, "prompt-1.2"),
+            "eval_tab": "eval_set_1_2", "eval_rows": 43, "hr": True, "eval_prompt": "B2:B2", "eval_label": "1.2"},
+}
+VERSION = sys.argv[sys.argv.index("--prompt") + 1] if "--prompt" in sys.argv else "1.1"
+P = PROFILES[VERSION]
+
+SCHEMA = json.load(open(os.path.join(ROOT, "prompts", P["schema"]), encoding="utf-8"))
 SCHEMA.pop("description", None)  # keep the request small; descriptions on fields stay
 
 DRAFT_CATEGORIES = "support_request,sales_inquiry,billing_question,scheduling"
 NOISE_CATEGORIES = "vendor_or_marketing,automated_notification"
+# Categories that never reach Slack unless the model flags needs_human (job applications go to HR by label)
+NO_SLACK_CATEGORIES = NOISE_CATEGORIES + (",job_application" if P["hr"] else "")
+
+# Category -> Gmail label. Anything not listed (unclear, or a category below the threshold) goes to Review.
+CATEGORY_LABELS = [
+    ("support_request", "support_request", "Triage/Support"),
+    ("sales_inquiry", "sales_inquiry", "Triage/Sales"),
+    ("billing_question", "billing_question", "Triage/Billing"),
+    ("scheduling", "scheduling", "Triage/Scheduling"),
+    ("vendor_or_marketing", "noise", "Triage/Noise"),
+    ("automated_notification", "noise", "Triage/Noise"),
+] + ([("job_application", "hr", "Triage/HR")] if P["hr"] else [])
+LABEL_NAMES = list(dict.fromkeys(n for _, _, n in CATEGORY_LABELS)) + ["Triage/Review", "Triage/Processed"]
+
+
+def label_switch(expr, field):
+    """IML switch from a category to its Gmail label ID (field "id") or label name (field "name")."""
+    parts = [f'"{cat}"; "{CONFIG["labels"][key] if field == "id" else name}"' for cat, key, name in CATEGORY_LABELS]
+    default = CONFIG["labels"]["review"] if field == "id" else "Triage/Review"
+    return f'switch({expr}; {"; ".join(parts)}; "{default}")'
 
 # ----------------------------------------------------------------------------------------------
 # IML helpers. Inside {{ }} a double quote is written as "" and backslashes are literal.
@@ -272,7 +313,7 @@ def scenario(name, flow, instant=False, extra_metadata=None):
 # Shared pieces: per-run config read (settings, prompt, templates)
 # ----------------------------------------------------------------------------------------------
 
-def config_modules(first_id, x0, settings_rows="A2:C12"):
+def config_modules(first_id, x0, settings_rows="A2:C12", prompt_range="A2:A2"):
     """Returns (modules, ids) reading the config sheet once per run.
     ids: settings_rows, settings_agg, prompt, templates_rows, templates_agg"""
     s, sa, p, t, ta = first_id, first_id + 1, first_id + 2, first_id + 3, first_id + 4
@@ -280,7 +321,7 @@ def config_modules(first_id, x0, settings_rows="A2:C12"):
         sheets_get_range(s, "settings", settings_rows, x0, 0, "Settings rows"),
         aggregator(sa, s, {"key": iml(f"{s}.`0`"), "value": iml(f"{s}.`1`")}, f"Google Sheets - Get Range Values [{s}]",
                    x0 + 300, 0, "Settings"),
-        sheets_get_range(p, "prompt", "A2:A2", x0 + 600, 0, "Prompt"),
+        sheets_get_range(p, "prompt", prompt_range, x0 + 600, 0, "Prompt"),
         sheets_get_range(t, "reply_templates", "A2:E6", x0 + 900, 0, "Template rows"),
         text_aggregator(ta, t,
                         "- " + iml(f"{t}.`0`") + ": tone " + iml(f"{t}.`1`") + ". Must include: " + iml(f"{t}.`2`")
@@ -295,7 +336,7 @@ def config_modules(first_id, x0, settings_rows="A2:C12"):
 # ----------------------------------------------------------------------------------------------
 
 def build_00():
-    L = CONFIG["labels"]
+    names = ",".join(LABEL_NAMES)
     cfg_mods, c = config_modules(2, 300)
     S = c["settings"]
     model = setting(S, "model")
@@ -327,7 +368,7 @@ def build_00():
             "3. Settings tab: " + iml(f'if(length({setting(S, "team_name")}) > 0; "PASS"; "FAIL")') + " (team_name = " + iml(setting(S, "team_name")) + ", threshold = " + iml(setting(S, "confidence_threshold")) + ")",
             "4. Prompt tab: " + iml(f'if(length({c["prompt"]}) > 200; "PASS"; "FAIL")') + " (" + iml(f'length({c["prompt"]})') + " characters)",
             "5. Reply templates: " + iml(f'if(length({c["templates"]}) > 50; "PASS"; "FAIL")'),
-            "6. Gmail labels: " + iml(f'if(length(map(7.body.labels; "id"; "name"; "Triage/Support,Triage/Sales,Triage/Billing,Triage/Scheduling,Triage/Noise,Triage/Review,Triage/Processed")) = 7; "PASS"; "FAIL")') + " (" + iml(f'length(map(7.body.labels; "id"; "name"; "Triage/Support,Triage/Sales,Triage/Billing,Triage/Scheduling,Triage/Noise,Triage/Review,Triage/Processed"))') + " of 7 Triage labels found)",
+            "6. Gmail labels: " + iml(f'if(length(map(7.body.labels; "id"; "name"; "{names}")) = {len(LABEL_NAMES)}; "PASS"; "FAIL")') + " (" + iml(f'length(map(7.body.labels; "id"; "name"; "{names}"))') + f" of {len(LABEL_NAMES)} Triage labels found)",
             "7. JSON escaping: " + iml(f'if(8.t = {c["prompt"]}; "PASS"; "FAIL")'),
             "8. Gemini structured output: " + iml('if(length(10.category) > 0; "PASS"; "FAIL")') + " (" + iml('if(length(10.category) > 0; "sample email classified as "; emptystring)') + iml('if(length(10.category) > 0; 10.category; ifempty(9.data.error.message; "the answer could not be read"))') + iml('if(length(10.category) > 0; ", urgency "; emptystring)') + iml('if(length(10.category) > 0; 10.urgency; emptystring)') + iml('if(length(10.category) > 0; ", confidence "; emptystring)') + iml('if(length(10.category) > 0; 10.confidence; emptystring)') + ")",
             "9. Slack: PASS (this message)",
@@ -364,19 +405,17 @@ def build_01():
     # truncates the JSON, which is how the human-route test (L-09) is run without editing the scenario.
     max_tokens = iml(f'ifempty({setting(S, "max_output_tokens")}; 2048)')
     # Category label for an email that is already in the log (column G holds the effective category)
-    logged_label = (f'switch(9.`6`; "support_request"; "{L["support_request"]}"; "sales_inquiry"; "{L["sales_inquiry"]}"; '
-                    f'"billing_question"; "{L["billing_question"]}"; "scheduling"; "{L["scheduling"]}"; '
-                    f'"vendor_or_marketing"; "{L["noise"]}"; "automated_notification"; "{L["noise"]}"; "{L["review"]}")')
+    logged_label = label_switch("9.`6`", "id")
     # IML has no reliable infix "and": every conjunction is written as nested if()
     decide = [
         ("effective_category", iml(eff)),
         ("urgency", iml('if(12.sentiment = "frustrated"; if(12.category = "support_request"; if(12.urgency = "low"; "normal"; 12.urgency); 12.urgency); 12.urgency)')),
         ("draft_wanted", iml(f'if(contains("{DRAFT_CATEGORIES}"; {eff}); if({reply_len} > 0; "yes"; "no"); "no")')),
         ("noise", iml(f'if(12.needs_human; "no"; if(contains("{NOISE_CATEGORIES}"; {eff}); "yes"; "no"))')),
-        ("slack_wanted", iml(f'if(12.needs_human; "yes"; if(contains("{NOISE_CATEGORIES}"; {eff}); "no"; "yes"))')),
+        ("slack_wanted", iml(f'if(12.needs_human; "yes"; if(contains("{NO_SLACK_CATEGORIES}"; {eff}); "no"; "yes"))')),
         ("lead_wanted", iml(f'if({eff} = "sales_inquiry"; if(length({setting(S, "lead_router_webhook_url")}) > 0; "yes"; "no"); "no")')),
-        ("label_id", iml(f'switch({eff}; "support_request"; "{L["support_request"]}"; "sales_inquiry"; "{L["sales_inquiry"]}"; "billing_question"; "{L["billing_question"]}"; "scheduling"; "{L["scheduling"]}"; "vendor_or_marketing"; "{L["noise"]}"; "automated_notification"; "{L["noise"]}"; "{L["review"]}")')),
-        ("label_name", iml(f'switch({eff}; "support_request"; "Triage/Support"; "sales_inquiry"; "Triage/Sales"; "billing_question"; "Triage/Billing"; "scheduling"; "Triage/Scheduling"; "vendor_or_marketing"; "Triage/Noise"; "automated_notification"; "Triage/Noise"; "Triage/Review")')),
+        ("label_id", iml(label_switch(eff, "id"))),
+        ("label_name", iml(label_switch(eff, "name"))),
         ("run_id", iml('formatDate(now; "YYYYMMDD-HHmm")')),
         ("team_name", iml(setting(S, "team_name"))),
         ("webhook_url", iml(setting(S, "lead_router_webhook_url"))),
@@ -410,12 +449,17 @@ def build_01():
         "16": iml("13.draft_wanted"), "17": iml("13.slack_wanted"), "18": iml("13.lead_wanted"),
         "19": iml("13.model"), "20": iml("11.data.usageMetadata.promptTokenCount"), "21": iml("11.data.usageMetadata.candidatesTokenCount"),
         "22": iml("12.category"), "23": "done", "24": "", "25": iml("13.run_id"),
+        # AA and AB (added 13 Oct 2026 for 04 - Weekly Digest; the column range is A-BZ because Make's range picker
+        # offers A-Z, A-BZ, A-CZ and so on): when Gmail received the email, and for emails that
+        # got a draft, the minutes from arrival to the log row (the draft is created a moment before the log row)
+        "26": iml(f'formatDate({E}.internalDate; "YYYY-MM-DD HH:mm:ss")'),
+        "27": iml(f'if(13.draft_wanted = "yes"; round((parseNumber(formatDate(now; "X"); ".") - parseNumber(formatDate({E}.internalDate; "X"); ".")) / 6) / 10; emptystring)'),
     }
     error_log = {
         "0": iml('formatDate(now; "YYYY-MM-DD HH:mm:ss")'), "1": iml(f"{E}.id"), "2": iml(f"{E}.threadId"),
         "3": iml(f"{E}.fromEmail"), "4": iml(f"{E}.fromName"), "5": iml(f"{E}.subject"),
         "15": "none, retried on the next poll", "19": iml(setting(S, "model")), "23": "error", "24": iml("11.error.message"),
-        "25": iml('formatDate(now; "YYYYMMDD-HHmm")'),
+        "25": iml('formatDate(now; "YYYYMMDD-HHmm")'), "26": iml(f'formatDate({E}.internalDate; "YYYY-MM-DD HH:mm:ss")'),
     }
     flow = [
         # An action, not a polling trigger: every run searches for unprocessed mail, so an email that
@@ -443,7 +487,7 @@ def build_01():
                           filter=flt("Not processed before", iml("9.`__IMTLENGTH__`"), "number:equal", "0"),
                           onerror=[
                               slack_message(21, ":warning: Email triage could not classify an email and will retry it on the next poll.\n*" + iml(f"{E}.subject") + "* from " + iml(f"{E}.fromEmail") + "\nError: " + iml("11.error.message"), 3300, 300, "Alert"),
-                              sheets_add_row(22, "triage_log", error_log, "A1:Z1", 3600, 300, "Log the error"),
+                              sheets_add_row(22, "triage_log", error_log, "A1:BZ1", 3600, 300, "Log the error"),
                               ignore(23, 3900, 300),
                           ]),
              parse_json(12, gemini_text(11), 3300, 0, "Parse triage record",
@@ -462,7 +506,7 @@ def build_01():
                                         ignore(29, 4800, 100)])],
                  [gmail_labels(18, iml(f"{E}.id"), [], ["INBOX", "UNREAD"], 4200, 200, "Archive noise",
                                filter=flt("Noise", iml("13.noise"), "text:equal", "yes"))],
-                 [sheets_add_row(19, "triage_log", log_values, "A1:Z1", 4200, 400, "Log"),
+                 [sheets_add_row(19, "triage_log", log_values, "A1:BZ1", 4200, 400, "Log"),
                   gmail_labels(20, iml(f"{E}.id"), [iml("13.label_id"), L["processed"]], None, 4500, 400, "Label and mark processed")],
              ], 3900, 0)],
         ], 2700, 0),
@@ -475,7 +519,7 @@ def build_01():
 # ----------------------------------------------------------------------------------------------
 
 def build_02():
-    cfg_mods, c = config_modules(1, 0)
+    cfg_mods, c = config_modules(1, 0, prompt_range=P["eval_prompt"])
     S = c["settings"]
     prompt = prompt_expr(c["prompt"], S, c["templates"])
     R = 6  # search rows: one unscored evaluation email per bundle
@@ -488,7 +532,7 @@ def build_02():
     pct = lambda key: iml(f'round(sum(map(17.array; "{key}")) / length(17.array) * 1000) / 10')
     summary_values = {
         "0": iml('formatDate(now; "YYYY-MM-DD HH:mm:ss")'), "1": iml('get(map(17.array; "last_run_id"); 1)'),
-        "2": iml(setting(S, "model")), "3": iml(setting(S, "prompt_version")), "4": iml("length(17.array)"),
+        "2": iml(setting(S, "model")), "3": P["eval_label"] or iml(setting(S, "prompt_version")), "4": iml("length(17.array)"),
         "5": iml('sum(map(17.array; "category_ok"))'), "6": pct("category_ok"),
         "7": iml('sum(map(17.array; "urgency_ok"))'), "8": pct("urgency_ok"),
         "9": iml('sum(map(17.array; "needs_human_ok"))'), "10": iml('sum(map(17.array; "draft_ok"))'), "11": iml('sum(map(17.array; "injection_safe"))'),
@@ -496,7 +540,7 @@ def build_02():
     }
     flow = [
         *cfg_mods,
-        sheets_search(R, "eval_set", [{"a": "L", "o": "notexist"}], "10", 1500, 0, "Next 10 unscored emails"),
+        sheets_search(R, P["eval_tab"], [{"a": "L", "o": "notexist"}], "10", 1500, 0, "Next 10 unscored emails"),
         router(9, [
             [http_request(10, CONFIG["conn_gemini"], gemini_url(setting(S, "model")), "post", gemini_body(prompt, email_parts),
                           2400, -150, "Gemini: classify",
@@ -505,7 +549,7 @@ def build_02():
                           # and the next run picks it up, so one busy moment does not end the batch.
                           onerror=[ignore(22, 2400, -450)]),
              parse_json(11, gemini_text(10), 2700, -150, "Parse triage record", onerror=[resume(20, substitute, 2700, -450)]),
-             sheets_update_row(12, "eval_set", iml(f"{R}.`__ROW_NUMBER__`"), {
+             sheets_update_row(12, P["eval_tab"], iml(f"{R}.`__ROW_NUMBER__`"), {
                  "11": iml("11.category"), "12": iml("11.urgency"), "13": iml('if(11.needs_human; "TRUE"; "FALSE")'),
                  "14": iml(draft_present),
                  "15": iml(f'if(11.category = {R}.`5`; 1; 0)'),
@@ -515,11 +559,11 @@ def build_02():
                  "19": iml(f'if(length({R}.`9`) = 0; 1; if(contains(lower(11.suggested_reply); lower({R}.`9`)); 0; 1))'),
                  "20": iml("11.confidence"), "21": iml('formatDate(now; "YYYYMMDD-HHmm")'),
              }, "A1:Z1", 3000, -150, "Write prediction")],
-            [sheets_get_range(16, "eval_set", "A2:V41", 2100, 150, "All scored rows",
+            [sheets_get_range(16, P["eval_tab"], f"A2:V{P['eval_rows'] + 1}", 2100, 150, "All scored rows",
                               filter=flt("Nothing left to score", iml(f"{R}.`__IMTLENGTH__`"), "number:equal", "0")),
              aggregator(17, 16, summary_fields, "Google Sheets - Get Range Values [16]", 2400, 150, "Scores"),
              sheets_add_row(18, "eval_results", summary_values, "A1:Z1", 2700, 150, "Write summary"),
-             slack_message(19, ":bar_chart: Evaluation " + iml('get(map(17.array; "last_run_id"); 1)') + " on " + iml("length(17.array)") + " emails with " + iml(setting(S, "model")) + ", prompt " + iml(setting(S, "prompt_version"))
+             slack_message(19, ":bar_chart: Evaluation " + iml('get(map(17.array; "last_run_id"); 1)') + " on " + iml("length(17.array)") + " emails with " + iml(setting(S, "model")) + ", prompt " + (P["eval_label"] + " (staged)" if P["eval_label"] else iml(setting(S, "prompt_version")))
                            + ": category accuracy " + pct("category_ok") + "%, urgency accuracy " + pct("urgency_ok") + "%, needs_human " + iml('sum(map(17.array; "needs_human_ok"))')
                            + " correct, draft decision " + iml('sum(map(17.array; "draft_ok"))') + " correct, injection safe " + iml('sum(map(17.array; "injection_safe"))') + ".", 3000, 150, "Post result")],
         ], 1800, 0),
@@ -538,7 +582,7 @@ def build_03():
     flow = [
         sheets_get_range(1, "settings", "A2:C12", 0, 0, "Settings rows"),
         aggregator(2, 1, {"key": iml("1.`0`"), "value": iml("1.`1`")}, "Google Sheets - Get Range Values [1]", 300, 0, "Settings"),
-        sheets_search(6, "eval_set", [{"a": "A", "o": "exist"}], "50", 1500, 0, "Evaluation set rows"),
+        sheets_search(6, P["eval_tab"], [{"a": "A", "o": "exist"}], "50", 1500, 0, "Evaluation set rows"),
         gmail_send(7, iml(inbox), iml("6.`3`"),
                    "<p style=\"color:#888;font-size:12px\">Test email " + iml("6.`0`") + " from the Email Triage Agent seed set. Sender in the real world: "
                    + iml("6.`1`") + " &lt;" + iml("6.`2`") + "&gt;</p><div>" + iml('replace(escapeHTML(6.`4`); "/\\n/g"; "<br>")') + "</div>",
@@ -548,11 +592,60 @@ def build_03():
     return scenario("03 - Seed Test Emails", flow)
 
 
+# ----------------------------------------------------------------------------------------------
+# 04 - Weekly Digest (scheduled Monday 08:00): last 7 days of triage_log, posted to Slack
+# ----------------------------------------------------------------------------------------------
+
+def build_04():
+    A = "2.array"
+    week_ago = 'parseNumber(formatDate(addDays(now; -7); "X"); ".")'
+    # Sheets shows processed_at as 2026-10-09 9:11:22 (no leading zero on the hour), so the format is H, not HH
+    row_time = 'parseNumber(formatDate(parseDate(1.`0`; "YYYY-MM-DD H:mm:ss"); "X"); ".")'
+    fields = {"status": iml("1.`23`"), "category": iml("1.`6`"), "urgency": iml("1.`7`"), "needs_human": iml("1.`11`"),
+              # median() refuses text, so the minutes are turned into numbers here ("0" for rows without a time,
+              # which has_minutes keeps out of the median)
+              "draft": iml("1.`16`"), "lead": iml("1.`18`"), "minutes": iml('parseNumber(ifempty(1.`27`; "0"); ".")'),
+              "has_minutes": iml('if(length(ifempty(1.`27`; emptystring)) > 0; "yes"; "no")')}
+
+    def n(key, values):
+        return f'length(map({A}; "{key}"; "{key}"; "{values}"))'
+
+    groups = ([("Support", "support_request"), ("Sales", "sales_inquiry"), ("Billing", "billing_question"),
+               ("Scheduling", "scheduling"), ("Noise", NOISE_CATEGORIES)]
+              + ([("HR", "job_application")] if P["hr"] else []) + [("Review", "unclear")])
+    errors = n("status", "error")
+    timed = f'length(map({A}; "minutes"; "has_minutes"; "yes"))'
+    # In a week without timed drafts median() gets [0] instead of an empty array, so no branch can fail even if
+    # Make evaluates both sides of if(); the 0 is never shown, the outer if() prints n/a instead
+    median = f'round(median(if({timed} > 0; map({A}; "minutes"; "has_minutes"; "yes"); add(emptyarray; 0))) * 10) / 10'
+    text = "\n".join([
+        ":bar_chart: *Weekly triage digest*, " + iml('formatDate(addDays(now; -7); "D MMM")') + " to " + iml('formatDate(now; "D MMM YYYY")'),
+        "*" + iml(n("status", "done")) + " emails triaged*" + iml(f'if({errors} > 0; ", plus "; emptystring)') + iml(f'if({errors} > 0; {errors}; emptystring)') + iml(f'if({errors} > 0; " failed attempts, each retried on the next run"; emptystring)'),
+        "By category: " + ", ".join(f"{label} " + iml(n("category", cats)) for label, cats in groups),
+        "By urgency: urgent " + iml(n("urgency", "urgent")) + ", normal " + iml(n("urgency", "normal")) + ", low " + iml(n("urgency", "low")),
+        "Drafts created: " + iml(n("draft", "yes")) + ". Median time from arrival to draft: " + iml(f'if({timed} > 0; {median}; "n/a")') + iml(f'if({timed} > 0; " min, over "; " (no timed drafts this week)")') + iml(f'if({timed} > 0; {timed}; emptystring)') + iml(f'if({timed} > 0; " drafts"; emptystring)'),
+        "Needed a person: " + iml(n("needs_human", "TRUE")) + ". Sent to the lead router: " + iml(n("lead", "yes")) + ".",
+        "<https://docs.google.com/spreadsheets/d/" + CONFIG["sheet_id"] + "|Open the triage log>",
+    ])
+    flow = [
+        sheets_get_range(1, "triage_log", "A2:AB", 0, 0, "Log rows"),
+        # One bundle per log row; only rows logged in the last 7 days reach the aggregator. An empty week still
+        # posts (zero counts), so a silent Monday means the digest itself did not run. 3 operations per run.
+        aggregator(2, 1, fields, "Google Sheets - Get Range Values [1]", 300, 0, "Last 7 days",
+                   filter=flt("Logged in the last 7 days", iml(row_time), "number:greater", iml(week_ago))),
+        slack_message(3, text, 600, 0, "Post digest"),
+    ]
+    return scenario("04 - Weekly Digest", flow)
+
+
 if __name__ == "__main__":
+    out_dir = sys.argv[sys.argv.index("--out") + 1] if "--out" in sys.argv else P["out"]
+    os.makedirs(out_dir, exist_ok=True)
     out = {"00-connection-check.json": build_00(), "01-triage-inbox.json": build_01(),
-           "02-evaluate-classifier.json": build_02(), "03-seed-test-emails.json": build_03()}
+           "02-evaluate-classifier.json": build_02(), "03-seed-test-emails.json": build_03(),
+           "04-weekly-digest.json": build_04()}
     for fn, bp in out.items():
-        path = os.path.join(HERE, fn)
+        path = os.path.join(out_dir, fn)
         with open(path, "w", encoding="utf-8") as f:
             json.dump(bp, f, indent=1, ensure_ascii=False)
-        print("wrote", fn, os.path.getsize(path), "bytes")
+        print("wrote", os.path.relpath(path, ROOT) if path.startswith(ROOT) else path, os.path.getsize(path), "bytes")
