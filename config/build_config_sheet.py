@@ -51,7 +51,8 @@ for row in ws.iter_rows(min_row=2, max_row=ws.max_row):
 ws = wb.create_sheet('reply_templates')
 header(ws, ['category', 'tone', 'must_include', 'must_avoid', 'closing'], [20, 22, 60, 50, 30])
 templates = [
-    ('support_request', 'Calm and concrete', 'Acknowledge the problem in one line; say a technician will pick it up and what they will check first; ask for one useful detail if it is missing (how many people are affected, when it started)', 'Promising a fix time; blaming the sender; technical jargon', 'We will keep you posted.'),
+    # Rewritten 13 Oct 2026 (Make it yours, s7-3): see "Decisions I made myself" in the README for why
+    ('support_request', 'Warm, plain and direct', 'Thank them for the detail; restate the problem in their words; say who is picking it up and the first thing they will check; ask for the one detail that would speed it up', 'Promising a time (including "immediately" or "today"); guessing the cause; jargon', 'Thanks for flagging it early. If they are chasing an earlier email, close with "Sorry for the wait." instead'),
     ('sales_inquiry', 'Warm and brief', 'Thank them for reaching out; one line confirming we work with companies like theirs; say a consultant will reply with next steps; ask about team size or timeline if not given', 'Prices, discounts, availability promises, naming other clients', 'Looking forward to talking.'),
     ('billing_question', 'Polite and factual', 'Acknowledge the specific invoice or request by number; say the billing team will check the account and reply; mention any document that will be needed', 'Confirming refunds, credits, amounts or cancellation terms', 'Thank you for your patience.'),
     ('scheduling', 'Friendly and short', 'Acknowledge the requested change; say someone will confirm the slot; offer to suggest alternatives', 'Confirming the slot as booked', 'Talk soon.'),
@@ -63,29 +64,33 @@ for row in ws.iter_rows(min_row=2, max_row=ws.max_row):
 
 # prompt
 ws = wb.create_sheet('prompt')
-header(ws, ['system_prompt'], [120])
+header(ws, ['system_prompt', 'staged_prompt'], [120, 80])
 prompt = open(os.path.join(ROOT, 'prompts', 'triage-system-prompt.md'), encoding='utf-8').read().strip()
-ws.append([prompt]); ws['A2'].alignment = WRAP; ws['A2'].fill = EDIT_FILL
+staged = open(os.path.join(ROOT, 'prompts', 'triage-system-prompt-1.2.md'), encoding='utf-8').read().strip()
+ws.append([prompt, staged]); ws['A2'].alignment = WRAP; ws['A2'].fill = EDIT_FILL; ws['B2'].alignment = WRAP
 ws.row_dimensions[2].height = 400
-ws.append(['The scenarios read this cell at the start of every run. {{team_name}} and {{reply_templates}} are filled from the other tabs. Change the text, bump prompt_version in settings, then run 02 - Evaluate Classifier to see the effect before it reaches the inbox.'])
-ws['A3'].alignment = WRAP; ws['A3'].font = Font(italic=True, color='4A5560')
+ws.append(['The scenarios read this cell at the start of every run. {{team_name}} and {{reply_templates}} are filled from the other tabs. Change the text, bump prompt_version in settings, then run 02 - Evaluate Classifier to see the effect before it reaches the inbox.',
+           'Staging cell: prompt 1.2, read only by the staged 02 - Evaluate Classifier (scenarios/prompt-1.2). It replaces A2 only after it passes the evaluation: docs/05-prompt-1.2-release.md'])
+for ref in ('A3', 'B3'):
+    ws[ref].alignment = WRAP; ws[ref].font = Font(italic=True, color='4A5560')
 
-# eval_set
-ws = wb.create_sheet('eval_set')
+# eval_set (prompt 1.1, 40 emails) and eval_set_1_2 (prompt 1.2, 43 emails, staged)
 cols = ['id', 'from_name', 'from_email', 'subject', 'body', 'expected_category', 'expected_urgency', 'expected_needs_human', 'draft_expected', 'forbidden_in_reply', 'notes',
         'predicted_category', 'predicted_urgency', 'predicted_needs_human', 'draft_present', 'category_ok', 'urgency_ok', 'needs_human_ok', 'draft_ok', 'injection_safe', 'confidence', 'last_run_id']
-header(ws, cols, [7, 16, 30, 32, 70, 20, 14, 12, 12, 22, 30, 20, 14, 12, 12, 10, 10, 12, 10, 12, 10, 12])
-with open(os.path.join(ROOT, 'eval', 'eval-set.csv'), encoding='utf-8') as f:
-    for r in csv.DictReader(f):
-        ws.append([r[c] for c in cols[:11]])
-for row in ws.iter_rows(min_row=2, max_row=ws.max_row):
-    row[4].alignment = WRAP
-    row[10].alignment = WRAP
+for tab, src in [('eval_set', 'eval-set.csv'), ('eval_set_1_2', 'eval-set-1.2.csv')]:
+    ws = wb.create_sheet(tab)
+    header(ws, cols, [7, 16, 30, 32, 70, 20, 14, 12, 12, 22, 30, 20, 14, 12, 12, 10, 10, 12, 10, 12, 10, 12])
+    with open(os.path.join(ROOT, 'eval', src), encoding='utf-8') as f:
+        for r in csv.DictReader(f):
+            ws.append([r[c] for c in cols[:11]])
+    for row in ws.iter_rows(min_row=2, max_row=ws.max_row):
+        row[4].alignment = WRAP
+        row[10].alignment = WRAP
 
 # triage_log
 ws = wb.create_sheet('triage_log')
-header(ws, ['processed_at', 'message_id', 'thread_id', 'from_email', 'from_name', 'subject', 'category', 'urgency', 'confidence', 'sentiment', 'language', 'needs_human', 'needs_human_reason', 'summary', 'key_facts', 'action', 'draft', 'slack', 'lead_router', 'model', 'input_tokens', 'output_tokens', 'raw_category', 'status', 'error', 'run_id'],
-       [20, 22, 22, 30, 16, 32, 18, 10, 10, 11, 9, 11, 30, 50, 30, 18, 20, 11, 16, 20, 11, 12, 11, 10, 30, 12])
+header(ws, ['processed_at', 'message_id', 'thread_id', 'from_email', 'from_name', 'subject', 'category', 'urgency', 'confidence', 'sentiment', 'language', 'needs_human', 'needs_human_reason', 'summary', 'key_facts', 'action', 'draft', 'slack', 'lead_router', 'model', 'input_tokens', 'output_tokens', 'raw_category', 'status', 'error', 'run_id', 'received_at', 'minutes_to_draft'],
+       [20, 22, 22, 30, 16, 32, 18, 10, 10, 11, 9, 11, 30, 50, 30, 18, 20, 11, 16, 20, 11, 12, 11, 10, 30, 12, 20, 14])
 
 # eval_results
 ws = wb.create_sheet('eval_results')
