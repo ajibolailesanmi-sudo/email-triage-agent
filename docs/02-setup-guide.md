@@ -6,7 +6,7 @@ Everything needed to run the Email Triage Agent on Make with the Gemini API, in 
 
 | Piece | Where it lives |
 |---|---|
-| Four Make scenarios: `00 - Connection Check`, `01 - Triage Inbox`, `02 - Evaluate Classifier`, `03 - Seed Test Emails` | Your Make organisation |
+| Five Make scenarios: `00 - Connection Check`, `01 - Triage Inbox`, `02 - Evaluate Classifier`, `03 - Seed Test Emails`, `04 - Weekly Digest` | Your Make organisation |
 | The inbox | Gmail, using the plus address `you+support@gmail.com` so triage only sees support mail |
 | The config sheet "Triage Config" | Google Sheets |
 | The channel `#support-triage` | Your Slack workspace |
@@ -57,7 +57,7 @@ Known limit: a testing-mode client's authorisation expires every 7 days, so the 
 
 ### A4. Gmail labels
 
-In Gmail, Settings, Labels, create these seven (the slash makes them nest under "Triage"): `Triage/Support`, `Triage/Sales`, `Triage/Billing`, `Triage/Scheduling`, `Triage/Noise`, `Triage/Review`, `Triage/Processed`.
+In Gmail, Settings, Labels, create these seven (the slash makes them nest under "Triage"): `Triage/Support`, `Triage/Sales`, `Triage/Billing`, `Triage/Scheduling`, `Triage/Noise`, `Triage/Review`, `Triage/Processed`. Prompt 1.2 (staged, see the [release plan](05-prompt-1.2-release.md)) adds an eighth, `Triage/HR`; creating it now does no harm.
 
 ### A5. Slack
 
@@ -86,9 +86,9 @@ Each connection is created once, from any scenario's module (**Add** next to Con
 
 The blueprints are generated, not hand-edited, so your IDs go into one file.
 
-1. Copy `scenarios/live-ids.example.json` to `scenarios/live-ids.json` and fill it in: Make zone, the Sheet ID from A6, the inbox plus-address, the Slack channel, the five connection IDs (open **Credentials, Connections**, click **Verify** on a connection and read the number from the browser's network panel, or hover the connection's Edit link), and the seven Gmail label IDs (run `00` once first, or call `GET /gmail/v1/users/me/labels` in the API explorer). The file is in `.gitignore`.
-2. Run `python3 scenarios/build_blueprints.py`. It writes the four JSON files in `scenarios/`.
-3. In Make, **Create a new scenario**, open the `⋮` menu at the top right, **Import blueprint**, choose `scenarios/00-connection-check.json`, then **Save**. Repeat for 01, 02 and 03. Modules that cannot find a connection show a warning: open them and pick the connection from Part B, then save again.
+1. Copy `scenarios/live-ids.example.json` to `scenarios/live-ids.json` and fill it in: Make zone, the Sheet ID from A6, the inbox plus-address, the Slack channel, the five connection IDs (open **Credentials, Connections**, click **Verify** on a connection and read the number from the browser's network panel, or hover the connection's Edit link), and the seven Gmail label IDs (plus `hr` for `Triage/HR` if you plan to release prompt 1.2) (run `00` once first, or call `GET /gmail/v1/users/me/labels` in the API explorer). The file is in `.gitignore`.
+2. Run `python3 scenarios/build_blueprints.py --out ../live-blueprints`. It writes the five JSON files with your IDs to that folder, outside the repository, so the committed placeholder copies in `scenarios/` stay clean.
+3. In Make, **Create a new scenario**, open the `⋮` menu at the top right, **Import blueprint** (or copy the file's text and use **Paste blueprint from clipboard**), choose `00-connection-check.json`, then **Save**. Repeat for 01, 02, 03 and 04. Modules that cannot find a connection show a warning: open them and pick the connection from Part B, then save again.
 4. Run `00 - Connection Check` once with **Run once**. It lists the Gemini models your key can use, reads the `settings` tab, lists your Gmail labels, round-trips the prompt through the JSON escaper, classifies a sample email and posts the nine results to `#support-triage`. Every line must say PASS before you continue.
 5. Pick the model: line 2 of the summary tells you whether the model named in `settings` exists for your key. The demo uses `gemini-3.5-flash-lite`; classification does not need a large model, and Flash-Lite has the most generous free-tier limits.
 
@@ -99,6 +99,7 @@ The blueprints are generated, not hand-edited, so your IDs go into one file.
 3. Run `01` once more: it should find nothing and cost two operations.
 4. Schedule `01 - Triage Inbox`: click the clock next to the scenario name, choose **Every hour** on weekdays 8 to 18 (or every 15 minutes on a paid plan), and switch the scenario **on**. From here the inbox triages itself. On the free plan this schedule costs about 480 operations a month in empty checks before any email arrives, so for a demo you can leave it off and use **Run once**.
 5. To measure the classifier, run `02 - Evaluate Classifier` five times, about a minute apart (four batches of ten and the summary). The result lands in `eval_results` and in Slack.
+6. Schedule `04 - Weekly Digest`: click the clock, choose **Weekly**, Monday, 08:00 (the time zone is the organisation's), save, run it once with **Run once** to see the post in `#support-triage`, then switch it **on**. It costs 3 operations a run.
 
 ## Part E: Known limits
 
