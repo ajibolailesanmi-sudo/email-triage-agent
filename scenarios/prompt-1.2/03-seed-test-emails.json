@@ -1,0 +1,164 @@
+{
+ "name": "03 - Seed Test Emails",
+ "flow": [
+  {
+   "id": 1,
+   "module": "google-sheets:getSheetContent",
+   "version": 2,
+   "parameters": {
+    "__IMTCONN__": 0
+   },
+   "mapper": {
+    "select": "map",
+    "range": "A2:C12",
+    "includesHeaders": false,
+    "valueRenderOption": "FORMATTED_VALUE",
+    "dateTimeRenderOption": "FORMATTED_STRING",
+    "spreadsheetId": "PASTE_SHEET_ID",
+    "sheetId": "settings"
+   },
+   "metadata": {
+    "designer": {
+     "x": 0,
+     "y": 0,
+     "name": "Settings rows"
+    }
+   }
+  },
+  {
+   "id": 2,
+   "module": "builtin:BasicAggregator",
+   "version": 1,
+   "parameters": {
+    "feeder": 1
+   },
+   "mapper": {
+    "key": "{{1.`0`}}",
+    "value": "{{1.`1`}}"
+   },
+   "metadata": {
+    "designer": {
+     "x": 300,
+     "y": 0,
+     "name": "Settings"
+    },
+    "restore": {
+     "extra": {
+      "feeder": {
+       "label": "Google Sheets - Get Range Values [1]"
+      },
+      "target": {
+       "label": "Custom"
+      }
+     }
+    }
+   }
+  },
+  {
+   "id": 6,
+   "module": "google-sheets:filterRows",
+   "version": 2,
+   "parameters": {
+    "__IMTCONN__": 0
+   },
+   "mapper": {
+    "from": "drive",
+    "filter": [
+     [
+      {
+       "a": "A",
+       "o": "exist"
+      }
+     ]
+    ],
+    "sheetId": "eval_set_1_2",
+    "sortOrder": "asc",
+    "limit": "50",
+    "spreadsheetId": "PASTE_SHEET_ID",
+    "tableFirstRow": "A1:CZ1",
+    "includesHeaders": true,
+    "valueRenderOption": "FORMATTED_VALUE",
+    "dateTimeRenderOption": "FORMATTED_STRING"
+   },
+   "metadata": {
+    "designer": {
+     "x": 1500,
+     "y": 0,
+     "name": "Evaluation set rows"
+    }
+   }
+  },
+  {
+   "id": 7,
+   "module": "google-email:sendAnEmail",
+   "version": 4,
+   "parameters": {
+    "__IMTCONN__": 0
+   },
+   "mapper": {
+    "to": [
+     "{{get(map(2.array; \"value\"; \"key\"; \"inbox_address\"); 1)}}"
+    ],
+    "subject": "{{6.`3`}}",
+    "bodyType": "rawHtml",
+    "content": "<p style=\"color:#888;font-size:12px\">Test email {{6.`0`}} from the Email Triage Agent seed set. Sender in the real world: {{6.`1`}} &lt;{{6.`2`}}&gt;</p><div>{{replace(escapeHTML(6.`4`); \"/\\n/g\"; \"<br>\")}}</div>"
+   },
+   "filter": {
+    "name": "Listed in seed_ids",
+    "conditions": [
+     [
+      {
+       "a": "{{if(contains(get(map(2.array; \"value\"; \"key\"; \"seed_ids\"); 1); 6.`0`); \"yes\"; \"no\")}}",
+       "o": "text:equal",
+       "b": "yes"
+      }
+     ]
+    ]
+   },
+   "metadata": {
+    "designer": {
+     "x": 1800,
+     "y": 0,
+     "name": "Send test email"
+    }
+   }
+  },
+  {
+   "id": 8,
+   "module": "util:FunctionSleep",
+   "version": 1,
+   "parameters": {},
+   "mapper": {
+    "duration": "2"
+   },
+   "metadata": {
+    "designer": {
+     "x": 2100,
+     "y": 0,
+     "name": "Pace"
+    }
+   }
+  }
+ ],
+ "metadata": {
+  "instant": false,
+  "version": 1,
+  "scenario": {
+   "roundtrips": 1,
+   "maxErrors": 3,
+   "autoCommit": true,
+   "autoCommitTriggerLast": true,
+   "sequential": false,
+   "slots": null,
+   "confidential": false,
+   "dataloss": false,
+   "dlq": false,
+   "freshVariables": false
+  },
+  "designer": {
+   "orphans": []
+  },
+  "zone": "eu1.make.com",
+  "notes": []
+ }
+}

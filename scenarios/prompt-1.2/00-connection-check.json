@@ -1,0 +1,399 @@
+{
+ "name": "00 - Connection Check",
+ "flow": [
+  {
+   "id": 1,
+   "module": "http:MakeRequest",
+   "version": 4,
+   "parameters": {
+    "tlsType": "",
+    "apiKeyAccount": 0,
+    "authenticationType": "apiKeyConnection"
+   },
+   "mapper": {
+    "url": "https://generativelanguage.googleapis.com/v1beta/models?pageSize=200",
+    "method": "get",
+    "timeout": "60",
+    "shareCookies": false,
+    "parseResponse": true,
+    "allowRedirects": true,
+    "stopOnHttpError": true,
+    "requestCompressedContent": true
+   },
+   "onerror": [
+    {
+     "id": 41,
+     "module": "builtin:Resume",
+     "version": 1,
+     "mapper": {
+      "data": {
+       "models": [],
+       "error": {
+        "message": "{{1.error.message}}"
+       }
+      },
+      "statusCode": 0
+     },
+     "metadata": {
+      "designer": {
+       "x": 0,
+       "y": 300
+      }
+     }
+    }
+   ],
+   "metadata": {
+    "designer": {
+     "x": 0,
+     "y": 0,
+     "name": "Gemini: list models"
+    }
+   }
+  },
+  {
+   "id": 2,
+   "module": "google-sheets:getSheetContent",
+   "version": 2,
+   "parameters": {
+    "__IMTCONN__": 0
+   },
+   "mapper": {
+    "select": "map",
+    "range": "A2:C12",
+    "includesHeaders": false,
+    "valueRenderOption": "FORMATTED_VALUE",
+    "dateTimeRenderOption": "FORMATTED_STRING",
+    "spreadsheetId": "PASTE_SHEET_ID",
+    "sheetId": "settings"
+   },
+   "metadata": {
+    "designer": {
+     "x": 300,
+     "y": 0,
+     "name": "Settings rows"
+    }
+   }
+  },
+  {
+   "id": 3,
+   "module": "builtin:BasicAggregator",
+   "version": 1,
+   "parameters": {
+    "feeder": 2
+   },
+   "mapper": {
+    "key": "{{2.`0`}}",
+    "value": "{{2.`1`}}"
+   },
+   "metadata": {
+    "designer": {
+     "x": 600,
+     "y": 0,
+     "name": "Settings"
+    },
+    "restore": {
+     "extra": {
+      "feeder": {
+       "label": "Google Sheets - Get Range Values [2]"
+      },
+      "target": {
+       "label": "Custom"
+      }
+     }
+    }
+   }
+  },
+  {
+   "id": 4,
+   "module": "google-sheets:getSheetContent",
+   "version": 2,
+   "parameters": {
+    "__IMTCONN__": 0
+   },
+   "mapper": {
+    "select": "map",
+    "range": "A2:A2",
+    "includesHeaders": false,
+    "valueRenderOption": "FORMATTED_VALUE",
+    "dateTimeRenderOption": "FORMATTED_STRING",
+    "spreadsheetId": "PASTE_SHEET_ID",
+    "sheetId": "prompt"
+   },
+   "metadata": {
+    "designer": {
+     "x": 900,
+     "y": 0,
+     "name": "Prompt"
+    }
+   }
+  },
+  {
+   "id": 5,
+   "module": "google-sheets:getSheetContent",
+   "version": 2,
+   "parameters": {
+    "__IMTCONN__": 0
+   },
+   "mapper": {
+    "select": "map",
+    "range": "A2:E6",
+    "includesHeaders": false,
+    "valueRenderOption": "FORMATTED_VALUE",
+    "dateTimeRenderOption": "FORMATTED_STRING",
+    "spreadsheetId": "PASTE_SHEET_ID",
+    "sheetId": "reply_templates"
+   },
+   "metadata": {
+    "designer": {
+     "x": 1200,
+     "y": 0,
+     "name": "Template rows"
+    }
+   }
+  },
+  {
+   "id": 6,
+   "module": "util:TextAggregator",
+   "version": 1,
+   "parameters": {
+    "feeder": 5,
+    "rowSeparator": "\n"
+   },
+   "mapper": {
+    "value": "- {{5.`0`}}: tone {{5.`1`}}. Must include: {{5.`2`}}. Must avoid: {{5.`3`}}. Closing line: {{5.`4`}}"
+   },
+   "metadata": {
+    "designer": {
+     "x": 1500,
+     "y": 0,
+     "name": "Reply templates"
+    },
+    "restore": {
+     "parameters": {
+      "rowSeparator": {
+       "label": "New row"
+      }
+     },
+     "extra": {
+      "feeder": {
+       "label": "Google Sheets - Get Range Values [5]"
+      }
+     }
+    }
+   }
+  },
+  {
+   "id": 7,
+   "module": "google-email:makeAnApiCall",
+   "version": 4,
+   "parameters": {
+    "__IMTCONN__": 0
+   },
+   "mapper": {
+    "url": "/v1/users/me/labels",
+    "method": "GET",
+    "headers": [
+     {
+      "key": "Content-Type",
+      "value": "application/json"
+     }
+    ]
+   },
+   "onerror": [
+    {
+     "id": 42,
+     "module": "builtin:Resume",
+     "version": 1,
+     "mapper": {
+      "body": {
+       "labels": []
+      },
+      "statusCode": 0
+     },
+     "metadata": {
+      "designer": {
+       "x": 1800,
+       "y": 300
+      }
+     }
+    }
+   ],
+   "metadata": {
+    "designer": {
+     "x": 1800,
+     "y": 0,
+     "name": "Gmail: list labels"
+    }
+   }
+  },
+  {
+   "id": 8,
+   "module": "json:ParseJSON",
+   "version": 1,
+   "parameters": {},
+   "mapper": {
+    "json": "{\"t\":\"{{replace(replace(replace(replace(replace(replace(4.`0`; \"/\\\\/g\"; \"\\\\\"); \"/\"\"/g\"; \"\\\"\"\"); \"/\\n/g\"; \"\\n\"); \"/\\r/g\"; emptystring); \"/\\t/g\"; \"\\t\"); \"/[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f]/g\"; emptystring)}}\"}"
+   },
+   "onerror": [
+    {
+     "id": 43,
+     "module": "builtin:Resume",
+     "version": 1,
+     "mapper": {
+      "t": ""
+     },
+     "metadata": {
+      "designer": {
+       "x": 2100,
+       "y": 300
+      }
+     }
+    }
+   ],
+   "metadata": {
+    "designer": {
+     "x": 2100,
+     "y": 0,
+     "name": "Escape self-test"
+    }
+   }
+  },
+  {
+   "id": 9,
+   "module": "http:MakeRequest",
+   "version": 4,
+   "parameters": {
+    "tlsType": "",
+    "apiKeyAccount": 0,
+    "authenticationType": "apiKeyConnection"
+   },
+   "mapper": {
+    "url": "https://generativelanguage.googleapis.com/v1beta/models/{{replace(get(map(3.array; \"value\"; \"key\"; \"model\"); 1); \"models/\"; emptystring)}}:generateContent",
+    "method": "post",
+    "timeout": "60",
+    "shareCookies": false,
+    "parseResponse": true,
+    "allowRedirects": true,
+    "stopOnHttpError": true,
+    "requestCompressedContent": true,
+    "contentType": "json",
+    "inputMethod": "jsonString",
+    "jsonStringBodyContent": "{\"systemInstruction\":{\"parts\":[{\"text\":\"{{replace(replace(replace(replace(replace(replace(replace(replace(4.`0`; \"/\\{\\{team_name\\}\\}/g\"; get(map(3.array; \"value\"; \"key\"; \"team_name\"); 1)); \"/\\{\\{reply_templates\\}\\}/g\"; 6.text); \"/\\\\/g\"; \"\\\\\"); \"/\"\"/g\"; \"\\\"\"\"); \"/\\n/g\"; \"\\n\"); \"/\\r/g\"; emptystring); \"/\\t/g\"; \"\\t\"); \"/[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f]/g\"; emptystring)}}\"}]},\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"From: Dana Whitlock <dana@example.com>\\nSubject: Nobody can log in this morning\\n\\nHi, since about 7:45 none of our three front desk PCs can sign in. We have patients arriving at 8:30. Dana\"}]}],\"generationConfig\":{\"temperature\":0,\"maxOutputTokens\":2048,\"responseMimeType\":\"application/json\",\"responseSchema\":{\"type\":\"object\",\"required\":[\"category\",\"urgency\",\"confidence\",\"summary\",\"sender_name\",\"company\",\"key_facts\",\"sentiment\",\"language\",\"needs_human\",\"needs_human_reason\",\"suggested_reply\"],\"propertyOrdering\":[\"category\",\"urgency\",\"confidence\",\"summary\",\"sender_name\",\"company\",\"key_facts\",\"sentiment\",\"language\",\"needs_human\",\"needs_human_reason\",\"suggested_reply\"],\"properties\":{\"category\":{\"type\":\"string\",\"enum\":[\"support_request\",\"sales_inquiry\",\"billing_question\",\"scheduling\",\"vendor_or_marketing\",\"automated_notification\",\"job_application\",\"unclear\"]},\"urgency\":{\"type\":\"string\",\"enum\":[\"urgent\",\"normal\",\"low\"]},\"confidence\":{\"type\":\"number\",\"minimum\":0,\"maximum\":1,\"description\":\"Confidence in the category, 0 to 1\"},\"summary\":{\"type\":\"string\",\"description\":\"What the sender wants, 30 words or fewer, in English\"},\"sender_name\":{\"type\":\"string\",\"nullable\":true},\"company\":{\"type\":\"string\",\"nullable\":true},\"key_facts\":{\"type\":\"array\",\"items\":{\"type\":\"string\"},\"maxItems\":8},\"sentiment\":{\"type\":\"string\",\"enum\":[\"positive\",\"neutral\",\"frustrated\"]},\"language\":{\"type\":\"string\",\"description\":\"ISO 639-1 code of the email body, for example en or de\"},\"needs_human\":{\"type\":\"boolean\"},\"needs_human_reason\":{\"type\":\"string\",\"nullable\":true},\"suggested_reply\":{\"type\":\"string\",\"nullable\":true,\"description\":\"Draft reply for support_request, sales_inquiry, billing_question and scheduling only; null otherwise. 120 words or fewer\"}}}}}"
+   },
+   "onerror": [
+    {
+     "id": 44,
+     "module": "builtin:Resume",
+     "version": 1,
+     "mapper": {
+      "data": {
+       "error": {
+        "message": "{{9.error.message}}"
+       }
+      },
+      "statusCode": 0
+     },
+     "metadata": {
+      "designer": {
+       "x": 2400,
+       "y": 300
+      }
+     }
+    }
+   ],
+   "metadata": {
+    "designer": {
+     "x": 2400,
+     "y": 0,
+     "name": "Gemini: sample classification"
+    }
+   }
+  },
+  {
+   "id": 10,
+   "module": "json:ParseJSON",
+   "version": 1,
+   "parameters": {},
+   "mapper": {
+    "json": "{{get(9.data; \"candidates.1.content.parts.1.text\")}}"
+   },
+   "onerror": [
+    {
+     "id": 45,
+     "module": "builtin:Resume",
+     "version": 1,
+     "mapper": {
+      "category": "",
+      "urgency": "",
+      "confidence": 0
+     },
+     "metadata": {
+      "designer": {
+       "x": 2700,
+       "y": 300
+      }
+     }
+    }
+   ],
+   "metadata": {
+    "designer": {
+     "x": 2700,
+     "y": 0,
+     "name": "Parse triage record"
+    }
+   }
+  },
+  {
+   "id": 11,
+   "module": "slack:CreateMessage",
+   "version": 4,
+   "parameters": {
+    "__IMTCONN__": 0
+   },
+   "mapper": {
+    "channelWType": "manualy",
+    "channel": "#support-triage",
+    "text": "Connection check {{formatDate(now; \"YYYY-MM-DD HH:mm\")}}\n1. Gemini key: {{if(length(1.data.models) > 0; \"PASS\"; \"FAIL\")}} ({{if(length(1.data.models) > 0; length(1.data.models); ifempty(1.data.error.message; \"no answer\"))}}{{if(length(1.data.models) > 0; \" models visible to this key\"; emptystring)}})\n2. Model {{get(map(3.array; \"value\"; \"key\"; \"model\"); 1)}}: {{if(contains(join(map(1.data.models; \"name\"); \",\"); replace(get(map(3.array; \"value\"; \"key\"; \"model\"); 1); \"models/\"; emptystring)); \"PASS\"; \"FAIL, not in the list for this key\")}}\n3. Settings tab: {{if(length(get(map(3.array; \"value\"; \"key\"; \"team_name\"); 1)) > 0; \"PASS\"; \"FAIL\")}} (team_name = {{get(map(3.array; \"value\"; \"key\"; \"team_name\"); 1)}}, threshold = {{get(map(3.array; \"value\"; \"key\"; \"confidence_threshold\"); 1)}})\n4. Prompt tab: {{if(length(4.`0`) > 200; \"PASS\"; \"FAIL\")}} ({{length(4.`0`)}} characters)\n5. Reply templates: {{if(length(6.text) > 50; \"PASS\"; \"FAIL\")}}\n6. Gmail labels: {{if(length(map(7.body.labels; \"id\"; \"name\"; \"Triage/Support,Triage/Sales,Triage/Billing,Triage/Scheduling,Triage/Noise,Triage/HR,Triage/Review,Triage/Processed\")) = 8; \"PASS\"; \"FAIL\")}} ({{length(map(7.body.labels; \"id\"; \"name\"; \"Triage/Support,Triage/Sales,Triage/Billing,Triage/Scheduling,Triage/Noise,Triage/HR,Triage/Review,Triage/Processed\"))}} of 8 Triage labels found)\n7. JSON escaping: {{if(8.t = 4.`0`; \"PASS\"; \"FAIL\")}}\n8. Gemini structured output: {{if(length(10.category) > 0; \"PASS\"; \"FAIL\")}} ({{if(length(10.category) > 0; \"sample email classified as \"; emptystring)}}{{if(length(10.category) > 0; 10.category; ifempty(9.data.error.message; \"the answer could not be read\"))}}{{if(length(10.category) > 0; \", urgency \"; emptystring)}}{{if(length(10.category) > 0; 10.urgency; emptystring)}}{{if(length(10.category) > 0; \", confidence \"; emptystring)}}{{if(length(10.category) > 0; 10.confidence; emptystring)}})\n9. Slack: PASS (this message)",
+    "parse": false,
+    "mrkdwn": true,
+    "unfurl_links": false,
+    "unfurl_media": false
+   },
+   "metadata": {
+    "designer": {
+     "x": 3000,
+     "y": 0,
+     "name": "Post summary"
+    },
+    "restore": {
+     "expect": {
+      "channelWType": {
+       "label": "Enter manually"
+      }
+     }
+    }
+   }
+  }
+ ],
+ "metadata": {
+  "instant": false,
+  "version": 1,
+  "scenario": {
+   "roundtrips": 1,
+   "maxErrors": 3,
+   "autoCommit": true,
+   "autoCommitTriggerLast": true,
+   "sequential": false,
+   "slots": null,
+   "confidential": false,
+   "dataloss": false,
+   "dlq": false,
+   "freshVariables": false
+  },
+  "designer": {
+   "orphans": []
+  },
+  "zone": "eu1.make.com",
+  "notes": []
+ }
+}
