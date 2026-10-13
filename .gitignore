@@ -1,0 +1,3 @@
+scenarios/live-ids.json
+__pycache__/
+*.pyc
