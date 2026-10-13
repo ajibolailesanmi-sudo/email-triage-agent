@@ -1,0 +1,23 @@
+{
+  "type": "object",
+  "description": "The triage record for one inbound email (prompt 1.2: adds job_application). Produced once per email; the API constrains the output to this shape.",
+  "required": ["category", "urgency", "confidence", "summary", "sender_name", "company", "key_facts", "sentiment", "language", "needs_human", "needs_human_reason", "suggested_reply"],
+  "propertyOrdering": ["category", "urgency", "confidence", "summary", "sender_name", "company", "key_facts", "sentiment", "language", "needs_human", "needs_human_reason", "suggested_reply"],
+  "properties": {
+    "category": {
+      "type": "string",
+      "enum": ["support_request", "sales_inquiry", "billing_question", "scheduling", "vendor_or_marketing", "automated_notification", "job_application", "unclear"]
+    },
+    "urgency": { "type": "string", "enum": ["urgent", "normal", "low"] },
+    "confidence": { "type": "number", "minimum": 0, "maximum": 1, "description": "Confidence in the category, 0 to 1" },
+    "summary": { "type": "string", "description": "What the sender wants, 30 words or fewer, in English" },
+    "sender_name": { "type": "string", "nullable": true },
+    "company": { "type": "string", "nullable": true },
+    "key_facts": { "type": "array", "items": { "type": "string" }, "maxItems": 8 },
+    "sentiment": { "type": "string", "enum": ["positive", "neutral", "frustrated"] },
+    "language": { "type": "string", "description": "ISO 639-1 code of the email body, for example en or de" },
+    "needs_human": { "type": "boolean" },
+    "needs_human_reason": { "type": "string", "nullable": true },
+    "suggested_reply": { "type": "string", "nullable": true, "description": "Draft reply for support_request, sales_inquiry, billing_question and scheduling only; null otherwise. 120 words or fewer" }
+  }
+}
