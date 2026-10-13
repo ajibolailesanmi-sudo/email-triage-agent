@@ -1,0 +1,20 @@
+{
+  "zone": "eu1.make.com",
+  "sheet_id": "PASTE_SHEET_ID",
+  "inbox": "you+support@gmail.com",
+  "conn_gmail": 0,
+  "conn_sheets": 0,
+  "conn_gemini": 0,
+  "conn_lead_router": 0,
+  "conn_slack": 0,
+  "slack_channel": "#support-triage",
+  "labels": {
+    "support_request": "Label_...",
+    "sales_inquiry": "Label_...",
+    "billing_question": "Label_...",
+    "scheduling": "Label_...",
+    "noise": "Label_...",
+    "review": "Label_...",
+    "processed": "Label_..."
+  }
+}

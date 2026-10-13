@@ -1,0 +1,950 @@
+{
+ "name": "01 - Triage Inbox",
+ "flow": [
+  {
+   "id": 1,
+   "module": "google-email:executeEmailSearchQuery",
+   "version": 4,
+   "parameters": {
+    "__IMTCONN__": 0
+   },
+   "mapper": {
+    "filterType": "gmailSearch",
+    "format": "full",
+    "q": "to:you+support@gmail.com -label:Triage/Processed",
+    "limit": "10",
+    "includeHtmlBody": false
+   },
+   "metadata": {
+    "designer": {
+     "x": 0,
+     "y": 0,
+     "name": "Unprocessed support mail"
+    }
+   }
+  },
+  {
+   "id": 2,
+   "module": "builtin:BasicAggregator",
+   "version": 1,
+   "flags": {
+    "stopIfEmpty": true
+   },
+   "parameters": {
+    "feeder": 1
+   },
+   "mapper": {
+    "id": "{{1.id}}",
+    "threadId": "{{1.threadId}}",
+    "internalDate": "{{1.internalDate}}",
+    "subject": "{{1.subject}}",
+    "fromName": "{{1.fromName}}",
+    "fromEmail": "{{1.fromEmail}}",
+    "snippet": "{{1.snippet}}",
+    "fullTextBody": "{{1.fullTextBody}}",
+    "hasAttachment": "{{1.hasAttachment}}"
+   },
+   "filter": {
+    "name": "Mail found",
+    "conditions": [
+     [
+      {
+       "a": "{{1.`__IMTLENGTH__`}}",
+       "o": "number:greater",
+       "b": "0"
+      }
+     ]
+    ]
+   },
+   "metadata": {
+    "designer": {
+     "x": 300,
+     "y": 0,
+     "name": "All new emails"
+    },
+    "restore": {
+     "extra": {
+      "feeder": {
+       "label": "Gmail - Search emails [1]"
+      },
+      "target": {
+       "label": "Custom"
+      }
+     }
+    }
+   }
+  },
+  {
+   "id": 3,
+   "module": "google-sheets:getSheetContent",
+   "version": 2,
+   "parameters": {
+    "__IMTCONN__": 0
+   },
+   "mapper": {
+    "select": "map",
+    "range": "A2:C12",
+    "includesHeaders": false,
+    "valueRenderOption": "FORMATTED_VALUE",
+    "dateTimeRenderOption": "FORMATTED_STRING",
+    "spreadsheetId": "PASTE_SHEET_ID",
+    "sheetId": "settings"
+   },
+   "metadata": {
+    "designer": {
+     "x": 600,
+     "y": 0,
+     "name": "Settings rows"
+    }
+   }
+  },
+  {
+   "id": 4,
+   "module": "builtin:BasicAggregator",
+   "version": 1,
+   "parameters": {
+    "feeder": 3
+   },
+   "mapper": {
+    "key": "{{3.`0`}}",
+    "value": "{{3.`1`}}"
+   },
+   "metadata": {
+    "designer": {
+     "x": 900,
+     "y": 0,
+     "name": "Settings"
+    },
+    "restore": {
+     "extra": {
+      "feeder": {
+       "label": "Google Sheets - Get Range Values [3]"
+      },
+      "target": {
+       "label": "Custom"
+      }
+     }
+    }
+   }
+  },
+  {
+   "id": 5,
+   "module": "google-sheets:getSheetContent",
+   "version": 2,
+   "parameters": {
+    "__IMTCONN__": 0
+   },
+   "mapper": {
+    "select": "map",
+    "range": "A2:A2",
+    "includesHeaders": false,
+    "valueRenderOption": "FORMATTED_VALUE",
+    "dateTimeRenderOption": "FORMATTED_STRING",
+    "spreadsheetId": "PASTE_SHEET_ID",
+    "sheetId": "prompt"
+   },
+   "metadata": {
+    "designer": {
+     "x": 1200,
+     "y": 0,
+     "name": "Prompt"
+    }
+   }
+  },
+  {
+   "id": 6,
+   "module": "google-sheets:getSheetContent",
+   "version": 2,
+   "parameters": {
+    "__IMTCONN__": 0
+   },
+   "mapper": {
+    "select": "map",
+    "range": "A2:E6",
+    "includesHeaders": false,
+    "valueRenderOption": "FORMATTED_VALUE",
+    "dateTimeRenderOption": "FORMATTED_STRING",
+    "spreadsheetId": "PASTE_SHEET_ID",
+    "sheetId": "reply_templates"
+   },
+   "metadata": {
+    "designer": {
+     "x": 1500,
+     "y": 0,
+     "name": "Template rows"
+    }
+   }
+  },
+  {
+   "id": 7,
+   "module": "util:TextAggregator",
+   "version": 1,
+   "parameters": {
+    "feeder": 6,
+    "rowSeparator": "\n"
+   },
+   "mapper": {
+    "value": "- {{6.`0`}}: tone {{6.`1`}}. Must include: {{6.`2`}}. Must avoid: {{6.`3`}}. Closing line: {{6.`4`}}"
+   },
+   "metadata": {
+    "designer": {
+     "x": 1800,
+     "y": 0,
+     "name": "Reply templates"
+    },
+    "restore": {
+     "parameters": {
+      "rowSeparator": {
+       "label": "New row"
+      }
+     },
+     "extra": {
+      "feeder": {
+       "label": "Google Sheets - Get Range Values [6]"
+      }
+     }
+    }
+   }
+  },
+  {
+   "id": 8,
+   "module": "builtin:BasicFeeder",
+   "version": 1,
+   "parameters": {},
+   "mapper": {
+    "array": "{{2.array}}"
+   },
+   "metadata": {
+    "designer": {
+     "x": 2100,
+     "y": 0,
+     "name": "One email at a time"
+    }
+   }
+  },
+  {
+   "id": 9,
+   "module": "google-sheets:filterRows",
+   "version": 2,
+   "parameters": {
+    "__IMTCONN__": 0
+   },
+   "mapper": {
+    "from": "drive",
+    "filter": [
+     [
+      {
+       "a": "B",
+       "b": "{{8.id}}",
+       "o": "text:equal"
+      },
+      {
+       "a": "X",
+       "b": "done",
+       "o": "text:equal"
+      }
+     ]
+    ],
+    "sheetId": "triage_log",
+    "sortOrder": "asc",
+    "limit": "1",
+    "spreadsheetId": "PASTE_SHEET_ID",
+    "tableFirstRow": "A1:CZ1",
+    "includesHeaders": true,
+    "valueRenderOption": "FORMATTED_VALUE",
+    "dateTimeRenderOption": "FORMATTED_STRING"
+   },
+   "metadata": {
+    "designer": {
+     "x": 2400,
+     "y": 0,
+     "name": "Already in the log?"
+    }
+   }
+  },
+  {
+   "id": 30,
+   "module": "builtin:BasicRouter",
+   "version": 1,
+   "routes": [
+    {
+     "flow": [
+      {
+       "id": 31,
+       "module": "google-email:updateEmailLabels",
+       "version": 4,
+       "parameters": {
+        "__IMTCONN__": 0
+       },
+       "mapper": {
+        "messageId": "{{8.id}}",
+        "addLabels": [
+         "{{switch(9.`6`; \"support_request\"; \"Label_SUPPORT\"; \"sales_inquiry\"; \"Label_SALES\"; \"billing_question\"; \"Label_BILLING\"; \"scheduling\"; \"Label_SCHEDULING\"; \"vendor_or_marketing\"; \"Label_NOISE\"; \"automated_notification\"; \"Label_NOISE\"; \"Label_REVIEW\")}}",
+         "Label_PROCESSED"
+        ]
+       },
+       "filter": {
+        "name": "Already in the log",
+        "conditions": [
+         [
+          {
+           "a": "{{9.`__IMTLENGTH__`}}",
+           "o": "number:greater",
+           "b": "0"
+          }
+         ]
+        ]
+       },
+       "onerror": [
+        {
+         "id": 32,
+         "module": "builtin:Ignore",
+         "version": 1,
+         "metadata": {
+          "designer": {
+           "x": 3300,
+           "y": -450
+          }
+         }
+        }
+       ],
+       "metadata": {
+        "designer": {
+         "x": 3000,
+         "y": -450,
+         "name": "Repair labels"
+        }
+       }
+      }
+     ]
+    },
+    {
+     "flow": [
+      {
+       "id": 11,
+       "module": "http:MakeRequest",
+       "version": 4,
+       "parameters": {
+        "tlsType": "",
+        "apiKeyAccount": 0,
+        "authenticationType": "apiKeyConnection"
+       },
+       "mapper": {
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/{{replace(get(map(4.array; \"value\"; \"key\"; \"model\"); 1); \"models/\"; emptystring)}}:generateContent",
+        "method": "post",
+        "timeout": "60",
+        "shareCookies": false,
+        "parseResponse": true,
+        "allowRedirects": true,
+        "stopOnHttpError": true,
+        "requestCompressedContent": true,
+        "contentType": "json",
+        "inputMethod": "jsonString",
+        "jsonStringBodyContent": "{\"systemInstruction\":{\"parts\":[{\"text\":\"{{replace(replace(replace(replace(replace(replace(replace(replace(5.`0`; \"/\\{\\{team_name\\}\\}/g\"; get(map(4.array; \"value\"; \"key\"; \"team_name\"); 1)); \"/\\{\\{reply_templates\\}\\}/g\"; 7.text); \"/\\\\/g\"; \"\\\\\"); \"/\"\"/g\"; \"\\\"\"\"); \"/\\n/g\"; \"\\n\"); \"/\\r/g\"; emptystring); \"/\\t/g\"; \"\\t\"); \"/[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f]/g\"; emptystring)}}\"}]},\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"From: {{replace(replace(replace(replace(replace(replace(8.fromName; \"/\\\\/g\"; \"\\\\\"); \"/\"\"/g\"; \"\\\"\"\"); \"/\\n/g\"; \"\\n\"); \"/\\r/g\"; emptystring); \"/\\t/g\"; \"\\t\"); \"/[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f]/g\"; emptystring)}} <{{replace(replace(replace(replace(replace(replace(8.fromEmail; \"/\\\\/g\"; \"\\\\\"); \"/\"\"/g\"; \"\\\"\"\"); \"/\\n/g\"; \"\\n\"); \"/\\r/g\"; emptystring); \"/\\t/g\"; \"\\t\"); \"/[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f]/g\"; emptystring)}}>\\nSubject: {{replace(replace(replace(replace(replace(replace(8.subject; \"/\\\\/g\"; \"\\\\\"); \"/\"\"/g\"; \"\\\"\"\"); \"/\\n/g\"; \"\\n\"); \"/\\r/g\"; emptystring); \"/\\t/g\"; \"\\t\"); \"/[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f]/g\"; emptystring)}}\\nReceived: {{replace(replace(replace(replace(replace(replace(formatDate(8.internalDate; \"YYYY-MM-DD HH:mm\"); \"/\\\\/g\"; \"\\\\\"); \"/\"\"/g\"; \"\\\"\"\"); \"/\\n/g\"; \"\\n\"); \"/\\r/g\"; emptystring); \"/\\t/g\"; \"\\t\"); \"/[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f]/g\"; emptystring)}}\\nAttachments: {{replace(replace(replace(replace(replace(replace(if(8.hasAttachment; \"yes\"; \"no\"); \"/\\\\/g\"; \"\\\\\"); \"/\"\"/g\"; \"\\\"\"\"); \"/\\n/g\"; \"\\n\"); \"/\\r/g\"; emptystring); \"/\\t/g\"; \"\\t\"); \"/[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f]/g\"; emptystring)}}\\n\\n{{replace(replace(replace(replace(replace(replace(substring(ifempty(8.fullTextBody; 8.snippet); 0; 6000); \"/\\\\/g\"; \"\\\\\"); \"/\"\"/g\"; \"\\\"\"\"); \"/\\n/g\"; \"\\n\"); \"/\\r/g\"; emptystring); \"/\\t/g\"; \"\\t\"); \"/[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f]/g\"; emptystring)}}\"}]}],\"generationConfig\":{\"temperature\":0,\"maxOutputTokens\":{{ifempty(get(map(4.array; \"value\"; \"key\"; \"max_output_tokens\"); 1); 2048)}},\"responseMimeType\":\"application/json\",\"responseSchema\":{\"type\":\"object\",\"required\":[\"category\",\"urgency\",\"confidence\",\"summary\",\"sender_name\",\"company\",\"key_facts\",\"sentiment\",\"language\",\"needs_human\",\"needs_human_reason\",\"suggested_reply\"],\"propertyOrdering\":[\"category\",\"urgency\",\"confidence\",\"summary\",\"sender_name\",\"company\",\"key_facts\",\"sentiment\",\"language\",\"needs_human\",\"needs_human_reason\",\"suggested_reply\"],\"properties\":{\"category\":{\"type\":\"string\",\"enum\":[\"support_request\",\"sales_inquiry\",\"billing_question\",\"scheduling\",\"vendor_or_marketing\",\"automated_notification\",\"unclear\"]},\"urgency\":{\"type\":\"string\",\"enum\":[\"urgent\",\"normal\",\"low\"]},\"confidence\":{\"type\":\"number\",\"minimum\":0,\"maximum\":1,\"description\":\"Confidence in the category, 0 to 1\"},\"summary\":{\"type\":\"string\",\"description\":\"What the sender wants, 30 words or fewer, in English\"},\"sender_name\":{\"type\":\"string\",\"nullable\":true},\"company\":{\"type\":\"string\",\"nullable\":true},\"key_facts\":{\"type\":\"array\",\"items\":{\"type\":\"string\"},\"maxItems\":8},\"sentiment\":{\"type\":\"string\",\"enum\":[\"positive\",\"neutral\",\"frustrated\"]},\"language\":{\"type\":\"string\",\"description\":\"ISO 639-1 code of the email body, for example en or de\"},\"needs_human\":{\"type\":\"boolean\"},\"needs_human_reason\":{\"type\":\"string\",\"nullable\":true},\"suggested_reply\":{\"type\":\"string\",\"nullable\":true,\"description\":\"Draft reply for support_request, sales_inquiry, billing_question and scheduling only; null otherwise. 120 words or fewer\"}}}}}"
+       },
+       "filter": {
+        "name": "Not processed before",
+        "conditions": [
+         [
+          {
+           "a": "{{9.`__IMTLENGTH__`}}",
+           "o": "number:equal",
+           "b": "0"
+          }
+         ]
+        ]
+       },
+       "onerror": [
+        {
+         "id": 21,
+         "module": "slack:CreateMessage",
+         "version": 4,
+         "parameters": {
+          "__IMTCONN__": 0
+         },
+         "mapper": {
+          "channelWType": "manualy",
+          "channel": "#support-triage",
+          "text": ":warning: Email triage could not classify an email and will retry it on the next poll.\n*{{8.subject}}* from {{8.fromEmail}}\nError: {{11.error.message}}",
+          "parse": false,
+          "mrkdwn": true,
+          "unfurl_links": false,
+          "unfurl_media": false
+         },
+         "metadata": {
+          "designer": {
+           "x": 3300,
+           "y": 300,
+           "name": "Alert"
+          },
+          "restore": {
+           "expect": {
+            "channelWType": {
+             "label": "Enter manually"
+            }
+           }
+          }
+         }
+        },
+        {
+         "id": 22,
+         "module": "google-sheets:addRow",
+         "version": 2,
+         "parameters": {
+          "__IMTCONN__": 0
+         },
+         "mapper": {
+          "mode": "map",
+          "insertUnformatted": false,
+          "valueInputOption": "USER_ENTERED",
+          "insertDataOption": "INSERT_ROWS",
+          "spreadsheetId": "PASTE_SHEET_ID",
+          "sheetId": "triage_log",
+          "tableFirstRow": "A1:Z1",
+          "values": {
+           "0": "{{formatDate(now; \"YYYY-MM-DD HH:mm:ss\")}}",
+           "1": "{{8.id}}",
+           "2": "{{8.threadId}}",
+           "3": "{{8.fromEmail}}",
+           "4": "{{8.fromName}}",
+           "5": "{{8.subject}}",
+           "15": "none, retried on the next poll",
+           "19": "{{get(map(4.array; \"value\"; \"key\"; \"model\"); 1)}}",
+           "23": "error",
+           "24": "{{11.error.message}}",
+           "25": "{{formatDate(now; \"YYYYMMDD-HHmm\")}}"
+          }
+         },
+         "metadata": {
+          "designer": {
+           "x": 3600,
+           "y": 300,
+           "name": "Log the error"
+          }
+         }
+        },
+        {
+         "id": 23,
+         "module": "builtin:Ignore",
+         "version": 1,
+         "metadata": {
+          "designer": {
+           "x": 3900,
+           "y": 300
+          }
+         }
+        }
+       ],
+       "metadata": {
+        "designer": {
+         "x": 3000,
+         "y": 0,
+         "name": "Gemini: classify and draft"
+        }
+       }
+      },
+      {
+       "id": 12,
+       "module": "json:ParseJSON",
+       "version": 1,
+       "parameters": {},
+       "mapper": {
+        "json": "{{get(11.data; \"candidates.1.content.parts.1.text\")}}"
+       },
+       "onerror": [
+        {
+         "id": 24,
+         "module": "builtin:Resume",
+         "version": 1,
+         "mapper": {
+          "category": "unclear",
+          "urgency": "normal",
+          "confidence": 0,
+          "summary": "The model answer could not be read; a person needs to look at this email",
+          "sender_name": "",
+          "company": "",
+          "key_facts": [],
+          "sentiment": "neutral",
+          "language": "en",
+          "needs_human": true,
+          "needs_human_reason": "Model output was not valid JSON: {{12.error.message}}",
+          "suggested_reply": ""
+         },
+         "metadata": {
+          "designer": {
+           "x": 3300,
+           "y": 600
+          }
+         }
+        }
+       ],
+       "metadata": {
+        "designer": {
+         "x": 3300,
+         "y": 0,
+         "name": "Parse triage record"
+        }
+       }
+      },
+      {
+       "id": 13,
+       "module": "util:SetVariables",
+       "version": 1,
+       "parameters": {},
+       "mapper": {
+        "variables": [
+         {
+          "name": "effective_category",
+          "value": "{{if(12.confidence < parseNumber(get(map(4.array; \"value\"; \"key\"; \"confidence_threshold\"); 1); \".\"); \"unclear\"; 12.category)}}"
+         },
+         {
+          "name": "urgency",
+          "value": "{{if(12.sentiment = \"frustrated\"; if(12.category = \"support_request\"; if(12.urgency = \"low\"; \"normal\"; 12.urgency); 12.urgency); 12.urgency)}}"
+         },
+         {
+          "name": "draft_wanted",
+          "value": "{{if(contains(\"support_request,sales_inquiry,billing_question,scheduling\"; if(12.confidence < parseNumber(get(map(4.array; \"value\"; \"key\"; \"confidence_threshold\"); 1); \".\"); \"unclear\"; 12.category)); if(length(ifempty(12.suggested_reply; emptystring)) > 0; \"yes\"; \"no\"); \"no\")}}"
+         },
+         {
+          "name": "noise",
+          "value": "{{if(12.needs_human; \"no\"; if(contains(\"vendor_or_marketing,automated_notification\"; if(12.confidence < parseNumber(get(map(4.array; \"value\"; \"key\"; \"confidence_threshold\"); 1); \".\"); \"unclear\"; 12.category)); \"yes\"; \"no\"))}}"
+         },
+         {
+          "name": "slack_wanted",
+          "value": "{{if(12.needs_human; \"yes\"; if(contains(\"vendor_or_marketing,automated_notification\"; if(12.confidence < parseNumber(get(map(4.array; \"value\"; \"key\"; \"confidence_threshold\"); 1); \".\"); \"unclear\"; 12.category)); \"no\"; \"yes\"))}}"
+         },
+         {
+          "name": "lead_wanted",
+          "value": "{{if(if(12.confidence < parseNumber(get(map(4.array; \"value\"; \"key\"; \"confidence_threshold\"); 1); \".\"); \"unclear\"; 12.category) = \"sales_inquiry\"; if(length(get(map(4.array; \"value\"; \"key\"; \"lead_router_webhook_url\"); 1)) > 0; \"yes\"; \"no\"); \"no\")}}"
+         },
+         {
+          "name": "label_id",
+          "value": "{{switch(if(12.confidence < parseNumber(get(map(4.array; \"value\"; \"key\"; \"confidence_threshold\"); 1); \".\"); \"unclear\"; 12.category); \"support_request\"; \"Label_SUPPORT\"; \"sales_inquiry\"; \"Label_SALES\"; \"billing_question\"; \"Label_BILLING\"; \"scheduling\"; \"Label_SCHEDULING\"; \"vendor_or_marketing\"; \"Label_NOISE\"; \"automated_notification\"; \"Label_NOISE\"; \"Label_REVIEW\")}}"
+         },
+         {
+          "name": "label_name",
+          "value": "{{switch(if(12.confidence < parseNumber(get(map(4.array; \"value\"; \"key\"; \"confidence_threshold\"); 1); \".\"); \"unclear\"; 12.category); \"support_request\"; \"Triage/Support\"; \"sales_inquiry\"; \"Triage/Sales\"; \"billing_question\"; \"Triage/Billing\"; \"scheduling\"; \"Triage/Scheduling\"; \"vendor_or_marketing\"; \"Triage/Noise\"; \"automated_notification\"; \"Triage/Noise\"; \"Triage/Review\")}}"
+         },
+         {
+          "name": "run_id",
+          "value": "{{formatDate(now; \"YYYYMMDD-HHmm\")}}"
+         },
+         {
+          "name": "team_name",
+          "value": "{{get(map(4.array; \"value\"; \"key\"; \"team_name\"); 1)}}"
+         },
+         {
+          "name": "webhook_url",
+          "value": "{{get(map(4.array; \"value\"; \"key\"; \"lead_router_webhook_url\"); 1)}}"
+         },
+         {
+          "name": "model",
+          "value": "{{get(map(4.array; \"value\"; \"key\"; \"model\"); 1)}}"
+         }
+        ]
+       },
+       "metadata": {
+        "designer": {
+         "x": 3600,
+         "y": 0,
+         "name": "Decide actions"
+        }
+       }
+      },
+      {
+       "id": 14,
+       "module": "builtin:BasicRouter",
+       "version": 1,
+       "routes": [
+        {
+         "flow": [
+          {
+           "id": 15,
+           "module": "google-email:createADraft",
+           "version": 4,
+           "parameters": {
+            "__IMTCONN__": 0
+           },
+           "mapper": {
+            "to": [
+             "{{8.fromEmail}}"
+            ],
+            "subject": "Re: {{8.subject}}",
+            "bodyType": "rawHtml",
+            "content": "<div>{{replace(escapeHTML(12.suggested_reply); \"/\\n/g\"; \"<br>\")}}</div>",
+            "threadId": "{{8.threadId}}"
+           },
+           "filter": {
+            "name": "Draft wanted",
+            "conditions": [
+             [
+              {
+               "a": "{{13.draft_wanted}}",
+               "o": "text:equal",
+               "b": "yes"
+              }
+             ]
+            ]
+           },
+           "onerror": [
+            {
+             "id": 25,
+             "module": "slack:CreateMessage",
+             "version": 4,
+             "parameters": {
+              "__IMTCONN__": 0
+             },
+             "mapper": {
+              "channelWType": "manualy",
+              "channel": "#support-triage",
+              "text": ":warning: The draft reply could not be created for *{{8.subject}}*. Error: {{15.error.message}}",
+              "parse": false,
+              "mrkdwn": true,
+              "unfurl_links": false,
+              "unfurl_media": false
+             },
+             "metadata": {
+              "designer": {
+               "x": 4500,
+               "y": -550,
+               "name": "Alert: draft failed"
+              },
+              "restore": {
+               "expect": {
+                "channelWType": {
+                 "label": "Enter manually"
+                }
+               }
+              }
+             }
+            },
+            {
+             "id": 26,
+             "module": "builtin:Ignore",
+             "version": 1,
+             "metadata": {
+              "designer": {
+               "x": 4800,
+               "y": -550
+              }
+             }
+            }
+           ],
+           "metadata": {
+            "designer": {
+             "x": 4200,
+             "y": -400,
+             "name": "Draft reply in thread"
+            }
+           }
+          }
+         ]
+        },
+        {
+         "flow": [
+          {
+           "id": 16,
+           "module": "slack:CreateMessage",
+           "version": 4,
+           "parameters": {
+            "__IMTCONN__": 0
+           },
+           "mapper": {
+            "channelWType": "manualy",
+            "channel": "#support-triage",
+            "text": "{{if(13.urgency = \"urgent\"; \":rotating_light: URGENT \"; emptystring)}}*{{13.label_name}}* {{if(13.effective_category = 12.category; emptystring; \"(model said \")}}{{if(13.effective_category = 12.category; emptystring; 12.category)}}{{if(13.effective_category = 12.category; emptystring; \", below the confidence threshold) \")}}from {{8.fromName}} <{{8.fromEmail}}>\n*{{8.subject}}*\n{{12.summary}}\n{{if(12.needs_human; \":raised_hand: Needs a person: \"; emptystring)}}{{if(12.needs_human; 12.needs_human_reason; emptystring)}}{{if(12.needs_human; newline; emptystring)}}{{if(length(12.key_facts) > 0; \"Facts: \"; emptystring)}}{{if(length(12.key_facts) > 0; join(12.key_facts; \"; \"); emptystring)}}{{if(length(12.key_facts) > 0; newline; emptystring)}}{{if(13.draft_wanted = \"yes\"; \"A draft reply is waiting in the thread. \"; emptystring)}}{{if(13.lead_wanted = \"yes\"; \"Sent to the lead router. \"; emptystring)}}<https://mail.google.com/mail/u/0/#all/{{8.threadId}}|Open in Gmail> (confidence {{12.confidence}}, {{12.sentiment}}, {{12.language}})",
+            "parse": false,
+            "mrkdwn": true,
+            "unfurl_links": false,
+            "unfurl_media": false
+           },
+           "filter": {
+            "name": "A person should see it",
+            "conditions": [
+             [
+              {
+               "a": "{{13.slack_wanted}}",
+               "o": "text:equal",
+               "b": "yes"
+              }
+             ]
+            ]
+           },
+           "onerror": [
+            {
+             "id": 27,
+             "module": "builtin:Ignore",
+             "version": 1,
+             "metadata": {
+              "designer": {
+               "x": 4500,
+               "y": -300
+              }
+             }
+            }
+           ],
+           "metadata": {
+            "designer": {
+             "x": 4200,
+             "y": -200,
+             "name": "Post to #support-triage"
+            },
+            "restore": {
+             "expect": {
+              "channelWType": {
+               "label": "Enter manually"
+              }
+             }
+            }
+           }
+          }
+         ]
+        },
+        {
+         "flow": [
+          {
+           "id": 17,
+           "module": "http:MakeRequest",
+           "version": 4,
+           "parameters": {
+            "tlsType": "",
+            "apiKeyAccount": 0,
+            "authenticationType": "apiKeyConnection"
+           },
+           "mapper": {
+            "url": "{{13.webhook_url}}",
+            "method": "post",
+            "timeout": "60",
+            "shareCookies": false,
+            "parseResponse": true,
+            "allowRedirects": true,
+            "stopOnHttpError": true,
+            "requestCompressedContent": true,
+            "contentType": "json",
+            "inputMethod": "jsonString",
+            "jsonStringBodyContent": "{\"event_id\":\"{{replace(replace(replace(replace(replace(replace(8.id; \"/\\\\/g\"; \"\\\\\"); \"/\"\"/g\"; \"\\\"\"\"); \"/\\n/g\"; \"\\n\"); \"/\\r/g\"; emptystring); \"/\\t/g\"; \"\\t\"); \"/[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f]/g\"; emptystring)}}\",\"submitted_at\":\"{{replace(replace(replace(replace(replace(replace(formatDate(8.internalDate; \"YYYY-MM-DD HH:mm:ss\"); \"/\\\\/g\"; \"\\\\\"); \"/\"\"/g\"; \"\\\"\"\"); \"/\\n/g\"; \"\\n\"); \"/\\r/g\"; emptystring); \"/\\t/g\"; \"\\t\"); \"/[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f]/g\"; emptystring)}}\",\"name\":\"{{replace(replace(replace(replace(replace(replace(ifempty(12.sender_name; 8.fromName); \"/\\\\/g\"; \"\\\\\"); \"/\"\"/g\"; \"\\\"\"\"); \"/\\n/g\"; \"\\n\"); \"/\\r/g\"; emptystring); \"/\\t/g\"; \"\\t\"); \"/[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f]/g\"; emptystring)}}\",\"email\":\"{{replace(replace(replace(replace(replace(replace(8.fromEmail; \"/\\\\/g\"; \"\\\\\"); \"/\"\"/g\"; \"\\\"\"\"); \"/\\n/g\"; \"\\n\"); \"/\\r/g\"; emptystring); \"/\\t/g\"; \"\\t\"); \"/[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f]/g\"; emptystring)}}\",\"company\":\"{{replace(replace(replace(replace(replace(replace(ifempty(12.company; emptystring); \"/\\\\/g\"; \"\\\\\"); \"/\"\"/g\"; \"\\\"\"\"); \"/\\n/g\"; \"\\n\"); \"/\\r/g\"; emptystring); \"/\\t/g\"; \"\\t\"); \"/[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f]/g\"; emptystring)}}\",\"service_interest\":\"{{replace(replace(replace(replace(replace(replace(12.summary; \"/\\\\/g\"; \"\\\\\"); \"/\"\"/g\"; \"\\\"\"\"); \"/\\n/g\"; \"\\n\"); \"/\\r/g\"; emptystring); \"/\\t/g\"; \"\\t\"); \"/[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f]/g\"; emptystring)}}\",\"message\":\"{{replace(replace(replace(replace(replace(replace(substring(ifempty(8.fullTextBody; 8.snippet); 0; 2000); \"/\\\\/g\"; \"\\\\\"); \"/\"\"/g\"; \"\\\"\"\"); \"/\\n/g\"; \"\\n\"); \"/\\r/g\"; emptystring); \"/\\t/g\"; \"\\t\"); \"/[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f]/g\"; emptystring)}}\",\"source_detail\":\"email-triage\",\"urgency\":\"{{13.urgency}}\"}"
+           },
+           "filter": {
+            "name": "Sales inquiry",
+            "conditions": [
+             [
+              {
+               "a": "{{13.lead_wanted}}",
+               "o": "text:equal",
+               "b": "yes"
+              }
+             ]
+            ]
+           },
+           "onerror": [
+            {
+             "id": 28,
+             "module": "slack:CreateMessage",
+             "version": 4,
+             "parameters": {
+              "__IMTCONN__": 0
+             },
+             "mapper": {
+              "channelWType": "manualy",
+              "channel": "#support-triage",
+              "text": ":warning: The lead router did not accept the sales inquiry *{{8.subject}}* from {{8.fromEmail}}. Add it by hand. Error: {{17.error.message}}",
+              "parse": false,
+              "mrkdwn": true,
+              "unfurl_links": false,
+              "unfurl_media": false
+             },
+             "metadata": {
+              "designer": {
+               "x": 4500,
+               "y": 100,
+               "name": "Alert: hand-off failed"
+              },
+              "restore": {
+               "expect": {
+                "channelWType": {
+                 "label": "Enter manually"
+                }
+               }
+              }
+             }
+            },
+            {
+             "id": 29,
+             "module": "builtin:Ignore",
+             "version": 1,
+             "metadata": {
+              "designer": {
+               "x": 4800,
+               "y": 100
+              }
+             }
+            }
+           ],
+           "metadata": {
+            "designer": {
+             "x": 4200,
+             "y": 0,
+             "name": "Hand to lead router"
+            }
+           }
+          }
+         ]
+        },
+        {
+         "flow": [
+          {
+           "id": 18,
+           "module": "google-email:updateEmailLabels",
+           "version": 4,
+           "parameters": {
+            "__IMTCONN__": 0
+           },
+           "mapper": {
+            "messageId": "{{8.id}}",
+            "addLabels": [],
+            "removeLabels": [
+             "INBOX",
+             "UNREAD"
+            ]
+           },
+           "filter": {
+            "name": "Noise",
+            "conditions": [
+             [
+              {
+               "a": "{{13.noise}}",
+               "o": "text:equal",
+               "b": "yes"
+              }
+             ]
+            ]
+           },
+           "metadata": {
+            "designer": {
+             "x": 4200,
+             "y": 200,
+             "name": "Archive noise"
+            }
+           }
+          }
+         ]
+        },
+        {
+         "flow": [
+          {
+           "id": 19,
+           "module": "google-sheets:addRow",
+           "version": 2,
+           "parameters": {
+            "__IMTCONN__": 0
+           },
+           "mapper": {
+            "mode": "map",
+            "insertUnformatted": false,
+            "valueInputOption": "USER_ENTERED",
+            "insertDataOption": "INSERT_ROWS",
+            "spreadsheetId": "PASTE_SHEET_ID",
+            "sheetId": "triage_log",
+            "tableFirstRow": "A1:Z1",
+            "values": {
+             "0": "{{formatDate(now; \"YYYY-MM-DD HH:mm:ss\")}}",
+             "1": "{{8.id}}",
+             "2": "{{8.threadId}}",
+             "3": "{{8.fromEmail}}",
+             "4": "{{8.fromName}}",
+             "5": "{{8.subject}}",
+             "6": "{{13.effective_category}}",
+             "7": "{{13.urgency}}",
+             "8": "{{12.confidence}}",
+             "9": "{{12.sentiment}}",
+             "10": "{{12.language}}",
+             "11": "{{if(12.needs_human; \"TRUE\"; \"FALSE\")}}",
+             "12": "{{12.needs_human_reason}}",
+             "13": "{{12.summary}}",
+             "14": "{{join(12.key_facts; \"; \")}}",
+             "15": "{{13.label_name}}{{if(13.draft_wanted = \"yes\"; \"; draft\"; emptystring)}}{{if(13.slack_wanted = \"yes\"; \"; slack\"; emptystring)}}{{if(13.lead_wanted = \"yes\"; \"; lead router\"; emptystring)}}{{if(13.noise = \"yes\"; \"; archived\"; emptystring)}}",
+             "16": "{{13.draft_wanted}}",
+             "17": "{{13.slack_wanted}}",
+             "18": "{{13.lead_wanted}}",
+             "19": "{{13.model}}",
+             "20": "{{11.data.usageMetadata.promptTokenCount}}",
+             "21": "{{11.data.usageMetadata.candidatesTokenCount}}",
+             "22": "{{12.category}}",
+             "23": "done",
+             "24": "",
+             "25": "{{13.run_id}}"
+            }
+           },
+           "metadata": {
+            "designer": {
+             "x": 4200,
+             "y": 400,
+             "name": "Log"
+            }
+           }
+          },
+          {
+           "id": 20,
+           "module": "google-email:updateEmailLabels",
+           "version": 4,
+           "parameters": {
+            "__IMTCONN__": 0
+           },
+           "mapper": {
+            "messageId": "{{8.id}}",
+            "addLabels": [
+             "{{13.label_id}}",
+             "Label_PROCESSED"
+            ]
+           },
+           "metadata": {
+            "designer": {
+             "x": 4500,
+             "y": 400,
+             "name": "Label and mark processed"
+            }
+           }
+          }
+         ]
+        }
+       ],
+       "metadata": {
+        "designer": {
+         "x": 3900,
+         "y": 0
+        }
+       }
+      }
+     ]
+    }
+   ],
+   "metadata": {
+    "designer": {
+     "x": 2700,
+     "y": 0
+    }
+   }
+  }
+ ],
+ "metadata": {
+  "instant": false,
+  "version": 1,
+  "scenario": {
+   "roundtrips": 1,
+   "maxErrors": 3,
+   "autoCommit": true,
+   "autoCommitTriggerLast": true,
+   "sequential": false,
+   "slots": null,
+   "confidential": false,
+   "dataloss": false,
+   "dlq": false,
+   "freshVariables": false
+  },
+  "designer": {
+   "orphans": []
+  },
+  "zone": "eu1.make.com",
+  "notes": []
+ }
+}
